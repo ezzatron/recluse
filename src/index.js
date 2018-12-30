@@ -97,10 +97,10 @@ async function inTransaction (pgClient, fn) {
 
   try {
     await fn()
-  } catch (e) {
+  } catch (error) {
     await pgClient.query('ROLLBACK')
 
-    throw e
+    throw error
   }
 
   await pgClient.query('COMMIT')
