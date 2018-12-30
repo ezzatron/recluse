@@ -1,0 +1,12 @@
+{
+  "name": "@eloquent/recluse",
+  "version": "0.0.0",
+  "description": "An event store client for Postgres",
+  "repository": "eloquent/recluse-node",
+  "author": "Erin Millard <ezzatron@gmail.com>",
+  "license": "MIT",
+  "main": "src/index.js",
+  "dependencies": {
+    "pg": "^7.7.1"
+  }
+}
