@@ -1,3 +1,5 @@
+const UNIQUE_VIOLATION = '23505'
+
 async function initializeSchema (pgClient) {
   await pgClient.query(`
     CREATE TABLE IF NOT EXISTS offset
@@ -43,12 +45,18 @@ async function initializeSchema (pgClient) {
 }
 
 async function insertStream (pgClient, type, name, next) {
-  const result = await pgClient.query(
-    'INSERT INTO stream (type, name, next) VALUES ($1, $2, $3) RETURNING id',
-    [type, name, next]
-  )
+  try {
+    const result = await pgClient.query(
+      'INSERT INTO stream (type, name, next) VALUES ($1, $2, $3) RETURNING id',
+      [type, name, next]
+    )
+  } catch (error) {
+    if (error.code === UNIQUE_VIOLATION) return [false, null]
 
-  return result.rows[0].id
+    throw error
+  }
+
+  return [true, result.rows[0].id]
 }
 
 async function updateStreamOffset (pgClient, name, start, next) {
@@ -57,7 +65,7 @@ async function updateStreamOffset (pgClient, name, start, next) {
     [next, name, start]
   )
 
-  return result.rows[0].id
+  return result.rowCount > 0 ? [true, result.rows[0].id] : [false, null]
 }
 
 async function updateGlobalOffset (pgClient, count) {
@@ -82,14 +90,19 @@ async function appendEvents (pgClient, type, name, start, events) {
   const count = events.length
   const next = start + count
 
-  const streamId = start === 0
+  const [isUpdated, streamId] = start === 0
     ? await insertStream(pgClient, type, name, next)
     : await updateStreamOffset(pgClient, name, start, next)
+
+  if (!isUpdated) return false
+
   const offset = await updateGlobalOffset(pgClient, count)
 
   for (let i = 0; i < count; ++i) {
     await insertEvent(pgClient, offset + i, streamId, start + i, events[i])
   }
+
+  return true
 }
 
 async function inTransaction (pgClient, fn) {
