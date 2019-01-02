@@ -1,14 +1,20 @@
 const {asyncQuery} = require('./pg.js')
 
+module.exports = {
+  initializeSchema,
+}
+
 const UNIQUE_VIOLATION = '23505'
 
 async function initializeSchema (pgClient) {
   await pgClient.query(`
-    CREATE TABLE IF NOT EXISTS offset
+    CREATE TABLE IF NOT EXISTS global_offset
     (
+      id bool DEFAULT TRUE,
       next bigint NOT NULL,
 
-      UNIQUE ((1))
+      PRIMARY KEY (id),
+      CONSTRAINT one_row CHECK (id)
     )
   `)
 
@@ -32,14 +38,14 @@ async function initializeSchema (pgClient) {
   await pgClient.query(`
     CREATE TABLE IF NOT EXISTS event
     (
-      offset bigint NOT NULL,
+      global_offset bigint NOT NULL,
       type text NOT NULL,
       stream_id bigint NOT NULL,
       stream_offset bigint NOT NULL,
       data bytea NOT NULL,
       time timestamp NOT NULL DEFAULT now(),
 
-      PRIMARY KEY (offset),
+      PRIMARY KEY (global_offset),
       UNIQUE (stream_id, stream_offset),
       FOREIGN KEY (stream_id) REFERENCES stream (id)
     )
@@ -72,7 +78,7 @@ async function updateStreamOffset (pgClient, name, start, next) {
 
 async function updateGlobalOffset (pgClient, count) {
   const result = await pgClient.query(
-    'INSERT INTO offset (next) VALUES ($1) ON CONFLICT DO UPDATE SET next = next + $1 RETURNING next',
+    'INSERT INTO global_offset (next) VALUES ($1) ON CONFLICT DO UPDATE SET next = next + $1 RETURNING next',
     [count]
   )
 
@@ -83,7 +89,7 @@ async function insertEvent (pgClient, offset, streamId, streamOffset, event) {
   const {type, data} = event
 
   await pgClient.query(
-    'INSERT INTO event (offset, type, stream_id, stream_offset, data) VALUES ($1, $2, $3, $4, $5)',
+    'INSERT INTO event (global_offset, type, stream_id, stream_offset, data) VALUES ($1, $2, $3, $4, $5)',
     [offset, type, streamId, streamOffset, data]
   )
 }
