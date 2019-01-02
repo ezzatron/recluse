@@ -1,4 +1,4 @@
-const QueryStream = require('pg-query-stream')
+const {asyncQuery} = require('./pg.js')
 
 const UNIQUE_VIOLATION = '23505'
 
@@ -107,46 +107,16 @@ async function appendEvents (pgClient, type, name, start, events) {
   return true
 }
 
-async function readEvents (pgClient, callback, name, offset = 0) {
-  return streamQuery(
-    pgClient,
+function readEvents (pgClient, name, offset = 0) {
+  return client.query(asyncQuery(
     `
     SELECT e.* FROM event AS e
     INNER JOIN stream AS s ON s.id = e.stream_id
     WHERE s.name = $1 AND e.stream_offset >= $2
     ORDER BY e.stream_offset
     `,
-    [name, offset],
-    callback
-  )
-}
-
-function streamQuery (pgClient, query, parameters, callback) {
-  return new Promise ((resolve, reject) => {
-    const stream = pgClient.query(new QueryStream(query, parameters))
-
-    stream.on('data', callback)
-    stream.on('error', handleError)
-    stream.on('end', handleEnd)
-    stream.on('close', handleEnd)
-
-    function handleError (error) {
-      removeHandlers()
-      reject(error)
-    }
-
-    function handleEnd () {
-      removeHandlers()
-      resolve()
-    }
-
-    function removeHandlers () {
-      stream.removeHandler('data', callback)
-      stream.removeHandler('error', handleError)
-      stream.removeHandler('end', handleEnd)
-      stream.removeHandler('close', handleEnd)
-    }
-  })
+    [name, offset]
+  ))
 }
 
 async function inTransaction (pgClient, fn) {
