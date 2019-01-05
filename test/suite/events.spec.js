@@ -25,26 +25,26 @@ describe('Events', pgSpec(function () {
     })
   })
 
-  context('with initialized schema', function () {
+  describe('appendEvents()', function () {
+    const type = 'stream-type-a'
+    const name = 'stream-name-a'
+    const eventA = {type: 'event-type-a', data: Buffer.from('a')}
+    const eventB = {type: 'event-type-b', data: Buffer.from('b')}
+    const eventC = {type: 'event-type-a', data: Buffer.from('c')}
+    const eventD = {type: 'event-type-b', data: Buffer.from('d')}
+
+    const selectEvent =
+      'SELECT * FROM recluse.event WHERE stream_id = $1 AND stream_offset = $2'
+
     beforeEach(async function () {
       await initializeSchema(this.pgClient)
     })
 
-    describe('appendEvents()', function () {
-      const selectEvent =
-        'SELECT * FROM recluse.event WHERE stream_id = $1 AND stream_offset = $2 AND type = $3 AND data = $4'
-
-      it('should be able to append to the beginning of a new stream', async function () {
-        const type = 'stream-type-a'
-        const name = 'stream-name-a'
-        const start = 0
-        const eventA = {type: 'event-type-a', data: Buffer.from('a')}
-        const eventB = {type: 'event-type-b', data: Buffer.from('b')}
-        const events = [eventA, eventB]
-        await appendEvents(this.pgClient, type, name, start, events)
-
-        expect(await this.query(selectEvent, [1, 0, eventA.type, eventA.data])).to.have.rowCount(1)
-        expect(await this.query(selectEvent, [1, 1, eventB.type, eventB.data])).to.have.rowCount(1)
+    context('with a new stream', function () {
+      it('should be able to append to the stream', async function () {
+        expect(await appendEvents(this.pgClient, type, name, 0, [eventA, eventB])).to.be.true()
+        expect(await this.query(selectEvent, [1, 0])).to.have.row(eventA)
+        expect(await this.query(selectEvent, [1, 1])).to.have.row(eventB)
       })
     })
   })
