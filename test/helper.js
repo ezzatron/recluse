@@ -8,24 +8,28 @@ function pgSpec (spec) {
   return function () {
     before(async function () {
       this.pgInitClient = createPgClient('postgres')
+      this.pgClient = createPgClient('recluse_test')
+
       await this.pgInitClient.connect()
       await this.pgInitClient.query('DROP DATABASE IF EXISTS recluse_test')
-    })
-
-    beforeEach(async function () {
       await this.pgInitClient.query('CREATE DATABASE recluse_test')
-
-      this.pgClient = createPgClient('recluse_test')
       await this.pgClient.connect()
     })
 
     afterEach(async function () {
-      this.pgClient && await this.pgClient.end()
-      await this.pgInitClient.query('DROP DATABASE recluse_test')
+      await this.pgClient.query('DROP SCHEMA recluse CASCADE')
     })
 
     after(async function () {
-      await this.pgInitClient.end()
+      try {
+        await this.pgClient.end()
+      } catch (error) {}
+
+      await this.pgInitClient.query('DROP DATABASE recluse_test')
+
+      try {
+        await this.pgInitClient.end()
+      } catch (error) {}
     })
 
     spec.call(this)

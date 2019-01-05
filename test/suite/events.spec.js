@@ -8,7 +8,7 @@ describe('Events', pgSpec(function () {
     it('should create the necessary tables', async function () {
       await initializeSchema(this.pgClient)
       const actual = await this.pgClient.query(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'recluse'"
       )
 
       expect(actual.rows).to.deep.include({table_name: 'global_offset'})
@@ -20,7 +20,7 @@ describe('Events', pgSpec(function () {
       await initializeSchema(this.pgClient)
       await initializeSchema(this.pgClient)
       const actual = await this.pgClient.query(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'recluse'"
       )
 
       expect(actual.rows).to.deep.include({table_name: 'global_offset'})

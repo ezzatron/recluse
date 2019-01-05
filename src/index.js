@@ -8,7 +8,11 @@ const UNIQUE_VIOLATION = '23505'
 
 async function initializeSchema (pgClient) {
   await pgClient.query(`
-    CREATE TABLE IF NOT EXISTS global_offset
+    CREATE SCHEMA IF NOT EXISTS recluse
+  `)
+
+  await pgClient.query(`
+    CREATE TABLE IF NOT EXISTS recluse.global_offset
     (
       id bool DEFAULT TRUE,
       next bigint NOT NULL,
@@ -19,7 +23,7 @@ async function initializeSchema (pgClient) {
   `)
 
   await pgClient.query(`
-    CREATE TABLE IF NOT EXISTS stream
+    CREATE TABLE IF NOT EXISTS recluse.stream
     (
       id bigserial NOT NULL,
       type text NOT NULL,
@@ -32,11 +36,11 @@ async function initializeSchema (pgClient) {
   `)
 
   await pgClient.query(`
-    CREATE INDEX IF NOT EXISTS idx_stream_type ON stream (type)
+    CREATE INDEX IF NOT EXISTS idx_stream_type ON recluse.stream (type)
   `)
 
   await pgClient.query(`
-    CREATE TABLE IF NOT EXISTS event
+    CREATE TABLE IF NOT EXISTS recluse.event
     (
       global_offset bigint NOT NULL,
       type text NOT NULL,
@@ -47,7 +51,7 @@ async function initializeSchema (pgClient) {
 
       PRIMARY KEY (global_offset),
       UNIQUE (stream_id, stream_offset),
-      FOREIGN KEY (stream_id) REFERENCES stream (id)
+      FOREIGN KEY (stream_id) REFERENCES recluse.stream (id)
     )
   `)
 }
@@ -55,7 +59,7 @@ async function initializeSchema (pgClient) {
 async function insertStream (pgClient, type, name, next) {
   try {
     const result = await pgClient.query(
-      'INSERT INTO stream (type, name, next) VALUES ($1, $2, $3) RETURNING id',
+      'INSERT INTO recluse.stream (type, name, next) VALUES ($1, $2, $3) RETURNING id',
       [type, name, next]
     )
   } catch (error) {
@@ -69,7 +73,7 @@ async function insertStream (pgClient, type, name, next) {
 
 async function updateStreamOffset (pgClient, name, start, next) {
   const result = await pgClient.query(
-    'UPDATE stream SET next = $1 WHERE name = $2 AND next = $3 RETURNING id',
+    'UPDATE recluse.stream SET next = $1 WHERE name = $2 AND next = $3 RETURNING id',
     [next, name, start]
   )
 
@@ -78,7 +82,7 @@ async function updateStreamOffset (pgClient, name, start, next) {
 
 async function updateGlobalOffset (pgClient, count) {
   const result = await pgClient.query(
-    'INSERT INTO global_offset (next) VALUES ($1) ON CONFLICT DO UPDATE SET next = next + $1 RETURNING next',
+    'INSERT INTO recluse.global_offset (next) VALUES ($1) ON CONFLICT DO UPDATE SET next = next + $1 RETURNING next',
     [count]
   )
 
@@ -89,7 +93,7 @@ async function insertEvent (pgClient, offset, streamId, streamOffset, event) {
   const {type, data} = event
 
   await pgClient.query(
-    'INSERT INTO event (global_offset, type, stream_id, stream_offset, data) VALUES ($1, $2, $3, $4, $5)',
+    'INSERT INTO recluse.event (global_offset, type, stream_id, stream_offset, data) VALUES ($1, $2, $3, $4, $5)',
     [offset, type, streamId, streamOffset, data]
   )
 }
@@ -116,8 +120,8 @@ async function appendEvents (pgClient, type, name, start, events) {
 function readEvents (pgClient, name, offset = 0) {
   return client.query(asyncQuery(
     `
-    SELECT e.* FROM event AS e
-    INNER JOIN stream AS s ON s.id = e.stream_id
+    SELECT e.* FROM recluse.event AS e
+    INNER JOIN recluse.stream AS s ON s.id = e.stream_id
     WHERE s.name = $1 AND e.stream_offset >= $2
     ORDER BY e.stream_offset
     `,
