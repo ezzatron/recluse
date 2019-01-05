@@ -26,12 +26,15 @@ describe('Events', pgSpec(function () {
   })
 
   describe('appendEvents()', function () {
-    const type = 'stream-type-a'
-    const name = 'stream-name-a'
-    const eventA = {type: 'event-type-a', data: Buffer.from('a')}
-    const eventB = {type: 'event-type-b', data: Buffer.from('b')}
-    const eventC = {type: 'event-type-a', data: Buffer.from('c')}
-    const eventD = {type: 'event-type-b', data: Buffer.from('d')}
+    const typeA = 'stream-type-a'
+    const nameA = 'stream-name-a'
+    const nameB = 'stream-name-b'
+    const eventTypeA = 'event-type-a'
+    const eventTypeB = 'event-type-b'
+    const eventA = {type: eventTypeA, data: Buffer.from('a')}
+    const eventB = {type: eventTypeB, data: Buffer.from('b')}
+    const eventC = {type: eventTypeA, data: Buffer.from('c')}
+    const eventD = {type: eventTypeB, data: Buffer.from('d')}
 
     const selectEvent =
       'SELECT * FROM recluse.event WHERE stream_id = $1 AND stream_offset = $2'
@@ -42,7 +45,7 @@ describe('Events', pgSpec(function () {
 
     context('with a new stream', function () {
       it('should be able to append to the stream', async function () {
-        expect(await appendEvents(this.pgClient, type, name, 0, [eventA, eventB])).to.be.true()
+        expect(await appendEvents(this.pgClient, typeA, nameA, 0, [eventA, eventB])).to.be.true()
         expect(await this.query(selectEvent, [1, 0])).to.have.row(eventA)
         expect(await this.query(selectEvent, [1, 1])).to.have.row(eventB)
       })
@@ -50,25 +53,42 @@ describe('Events', pgSpec(function () {
 
     context('with an existing stream', function () {
       beforeEach(async function () {
-        await appendEvents(this.pgClient, type, name, 0, [eventA, eventB])
+        await appendEvents(this.pgClient, typeA, nameA, 0, [eventA, eventB])
       })
 
       it('should be able to append to the stream', async function () {
-        expect(await appendEvents(this.pgClient, type, name, 2, [eventC, eventD])).to.be.true()
+        expect(await appendEvents(this.pgClient, typeA, nameA, 2, [eventC, eventD])).to.be.true()
         expect(await this.query(selectEvent, [1, 2])).to.have.row(eventC)
         expect(await this.query(selectEvent, [1, 3])).to.have.row(eventD)
       })
 
       it('should fail if the specified offset is less than the next stream offset', async function () {
-        expect(await appendEvents(this.pgClient, type, name, 1, [eventC, eventD])).to.be.false()
+        expect(await appendEvents(this.pgClient, typeA, nameA, 1, [eventC, eventD])).to.be.false()
         expect(await this.query(selectEvent, [1, 2])).to.have.rowCount(0)
         expect(await this.query(selectEvent, [1, 3])).to.have.rowCount(0)
       })
 
       it('should fail if the specified offset is greater than the next stream offset', async function () {
-        expect(await appendEvents(this.pgClient, type, name, 3, [eventC, eventD])).to.be.false()
+        expect(await appendEvents(this.pgClient, typeA, nameA, 3, [eventC, eventD])).to.be.false()
         expect(await this.query(selectEvent, [1, 2])).to.have.rowCount(0)
         expect(await this.query(selectEvent, [1, 3])).to.have.rowCount(0)
+      })
+    })
+
+    context('with multiple streams', function () {
+      beforeEach(async function () {
+        await appendEvents(this.pgClient, typeA, nameA, 0, [eventA])
+        await appendEvents(this.pgClient, typeA, nameB, 0, [eventB])
+        await appendEvents(this.pgClient, typeA, nameA, 1, [eventC])
+        await appendEvents(this.pgClient, typeA, nameB, 1, [eventD])
+      })
+
+      it('should record the global offset', async function () {
+        expect(await appendEvents(this.pgClient, typeA, nameA, 3, [eventC, eventD])).to.be.false()
+        expect(await this.query(selectEvent, [1, 0])).to.have.row({...eventA, global_offset: '0'})
+        expect(await this.query(selectEvent, [2, 0])).to.have.row({...eventB, global_offset: '1'})
+        expect(await this.query(selectEvent, [1, 1])).to.have.row({...eventC, global_offset: '2'})
+        expect(await this.query(selectEvent, [2, 1])).to.have.row({...eventD, global_offset: '3'})
       })
     })
   })
