@@ -1,28 +1,45 @@
-const {Client} = require('pg')
+const {Client: PgClient} = require('pg')
 
 module.exports = {
-  createPgClient,
-  destroyPgClient,
+  pgSpec,
 }
 
-async function createPgClient () {
+function pgSpec (spec) {
+  return function () {
+    before(async function () {
+      this.pgInitClient = createPgClient('postgres')
+      await this.pgInitClient.connect()
+      await this.pgInitClient.query('DROP DATABASE IF EXISTS recluse_test')
+    })
+
+    beforeEach(async function () {
+      await this.pgInitClient.query('CREATE DATABASE recluse_test')
+
+      this.pgClient = createPgClient('recluse_test')
+      await this.pgClient.connect()
+    })
+
+    afterEach(async function () {
+      this.pgClient && await this.pgClient.end()
+      await this.pgInitClient.query('DROP DATABASE recluse_test')
+    })
+
+    after(async function () {
+      await this.pgInitClient.end()
+    })
+
+    spec.call(this)
+  }
+}
+
+function createPgClient (database) {
   const {PGHOST, PGPORT, PGUSER, PGPASSWORD} = process.env
-  const host = PGHOST || 'localhost'
-  const port = parseInt(PGPORT || '5432')
-  const user = PGUSER || 'postgres'
-  const password = PGPASSWORD || ''
 
-  this.pgInitClient = new Client({host, port, user, password, database: 'postgres'})
-  await this.pgInitClient.connect()
-  await this.pgInitClient.query('DROP DATABASE IF EXISTS recluse_test')
-  await this.pgInitClient.query('CREATE DATABASE recluse_test')
-
-  this.pgClient = new Client({host, port, user, password, database: 'recluse_test'})
-  await this.pgClient.connect()
-}
-
-async function destroyPgClient () {
-  this.pgClient && await this.pgClient.end()
-  await this.pgInitClient.query('DROP DATABASE recluse_test')
-  await this.pgInitClient.end()
+  return new PgClient({
+    host: PGHOST || 'localhost',
+    port: parseInt(PGPORT || '5432'),
+    user: PGUSER || 'postgres',
+    password: PGPASSWORD || '',
+    database,
+  })
 }

@@ -1,11 +1,9 @@
-const {createPgClient, destroyPgClient} = require('../helper.js')
 const {expect} = require('chai')
+const {pgSpec} = require('../helper.js')
 
 const {initializeSchema} = require('../../src/index.js')
 
-describe('Events', function () {
-  before(createPgClient)
-
+describe('Events', pgSpec(function () {
   describe('initializeSchema()', function () {
     it('should create the necessary tables', async function () {
       await initializeSchema(this.pgClient)
@@ -18,6 +16,4 @@ describe('Events', function () {
       expect(actual.rows).to.deep.include({table_name: 'event'})
     })
   })
-
-  after(destroyPgClient)
-})
+}))
