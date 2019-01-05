@@ -1,4 +1,3 @@
-const Docker = require('dockerode')
 const {Client} = require('pg')
 const {expect} = require('chai')
 
@@ -6,43 +5,19 @@ const {initializeSchema} = require('../../src/index.js')
 
 describe('Events', function () {
   before(async function () {
-    this.timeout(30 * 1000)
+    const {PGHOST, PGPORT, PGUSER, PGPASSWORD} = process.env
+    const host = PGHOST || 'localhost'
+    const port = parseInt(PGPORT || '5432')
+    const user = PGUSER || 'postgres'
+    const password = PGPASSWORD || ''
 
-    const docker = new Docker()
+    this.pgInitClient = new Client({host, port, user, password, database: 'postgres'})
+    await this.pgInitClient.connect()
+    await this.pgInitClient.query('DROP DATABASE IF EXISTS recluse_test')
+    await this.pgInitClient.query('CREATE DATABASE recluse_test')
 
-    this.postgresContainer = await docker.createContainer({
-      name: `test-postgres-${Math.random().toString(36).substring(2, 15)}`,
-      Image: 'postgres:alpine',
-      Env: [
-        'POSTGRES_USER=user',
-        'POSTGRES_PASSWORD=password',
-        'POSTGRES_DB=test',
-      ],
-      PublishAllPorts: true,
-    })
-    await this.postgresContainer.start()
-
-    const inspection = await this.postgresContainer.inspect()
-    const attempts = 10
-
-    for (let i = 0; i < attempts; ++i) {
-      try {
-        this.pgClient = new Client({
-          host: 'localhost',
-          port: inspection.NetworkSettings.Ports['5432/tcp'][0].HostPort,
-          user: 'user',
-          password: 'password',
-          database: 'test',
-        })
-        await this.pgClient.connect()
-
-        break
-      } catch (error) {
-        if (i === attempts - 1) throw error
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 500))
-    }
+    this.pgClient = new Client({host, port, user, password, database: 'recluse_test'})
+    await this.pgClient.connect()
   })
 
   describe('initializeSchema()', function () {
@@ -59,12 +34,8 @@ describe('Events', function () {
   })
 
   after(async function () {
-    this.timeout(10 * 1000)
-
-    try {
-      await this.pgClient.end()
-    } catch (error) {}
-
-    await this.postgresContainer.remove({force: true, v: true})
+    this.pgClient && await this.pgClient.end()
+    await this.pgInitClient.query('DROP DATABASE recluse_test')
+    await this.pgInitClient.end()
   })
 })

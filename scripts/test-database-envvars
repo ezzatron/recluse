@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+PUBLISHED="$(docker port recluse-test-postgres 5432)"
+
+echo "export PGHOST=localhost"
+echo "export PGPORT=${PUBLISHED#"0.0.0.0:"}"
+echo "export PGUSER=postgres"
