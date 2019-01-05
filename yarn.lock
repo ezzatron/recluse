@@ -30,6 +30,11 @@ buffer-writer@2.0.0:
   resolved "https://registry.yarnpkg.com/buffer-writer/-/buffer-writer-2.0.0.tgz#ce7eb81a38f7829db09c873f2fbb792c0c98ec04"
   integrity sha512-a7ZpuTZU1TRtnwyCNW3I5dc0wWNC3VR9S++Ewyk2HHZdrO3CQJqSpd+95Us590V6AL7JqUAH2IwZ/398PmNFgw==
 
+chai-bytes@^0.1.2:
+  version "0.1.2"
+  resolved "https://registry.yarnpkg.com/chai-bytes/-/chai-bytes-0.1.2.tgz#c297e81d47eb3106af0676ded5bb5e0c9f981db3"
+  integrity sha512-0ol6oJS0y1ozj6AZK8n1pyv1/G+l44nqUJygAkK1UrYl+IOGie5vcrEdrAlwmLYGIA9NVvtHWosPYwWWIXf/XA==
+
 chai@^4.2.0:
   version "4.2.0"
   resolved "https://registry.yarnpkg.com/chai/-/chai-4.2.0.tgz#760aa72cf20e3795e84b12877ce0e83737aa29e5"

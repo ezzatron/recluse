@@ -1,6 +1,7 @@
 const {asyncQuery} = require('./pg.js')
 
 module.exports = {
+  appendEvents,
   initializeSchema,
 }
 
@@ -57,8 +58,10 @@ async function initializeSchema (pgClient) {
 }
 
 async function insertStream (pgClient, type, name, next) {
+  let result
+
   try {
-    const result = await pgClient.query(
+    result = await pgClient.query(
       'INSERT INTO recluse.stream (type, name, next) VALUES ($1, $2, $3) RETURNING id',
       [type, name, next]
     )
@@ -82,7 +85,11 @@ async function updateStreamOffset (pgClient, name, start, next) {
 
 async function updateGlobalOffset (pgClient, count) {
   const result = await pgClient.query(
-    'INSERT INTO recluse.global_offset (next) VALUES ($1) ON CONFLICT DO UPDATE SET next = next + $1 RETURNING next',
+    `
+    INSERT INTO recluse.global_offset AS go (next) VALUES ($1)
+    ON CONFLICT (id) DO UPDATE SET next = go.next + $1
+    RETURNING next
+    `,
     [count]
   )
 
