@@ -15,5 +15,17 @@ describe('Events', pgSpec(function () {
       expect(actual.rows).to.deep.include({table_name: 'stream'})
       expect(actual.rows).to.deep.include({table_name: 'event'})
     })
+
+    it('should be safe to run multiple times', async function () {
+      await initializeSchema(this.pgClient)
+      await initializeSchema(this.pgClient)
+      const actual = await this.pgClient.query(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+      )
+
+      expect(actual.rows).to.deep.include({table_name: 'global_offset'})
+      expect(actual.rows).to.deep.include({table_name: 'stream'})
+      expect(actual.rows).to.deep.include({table_name: 'event'})
+    })
   })
 }))
