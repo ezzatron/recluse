@@ -7,25 +7,21 @@ describe('Events', pgSpec(function () {
   describe('initializeSchema()', function () {
     it('should create the necessary tables', async function () {
       await initializeSchema(this.pgClient)
-      const actual = await this.pgClient.query(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'recluse'"
-      )
 
-      expect(actual.rows).to.deep.include({table_name: 'global_offset'})
-      expect(actual.rows).to.deep.include({table_name: 'stream'})
-      expect(actual.rows).to.deep.include({table_name: 'event'})
+      const selectTable = "SELECT * FROM information_schema.tables WHERE table_schema = 'recluse' AND table_name = $1"
+      expect(await this.query(selectTable, ['global_offset'])).to.have.rowCount(1)
+      expect(await this.query(selectTable, ['stream'])).to.have.rowCount(1)
+      expect(await this.query(selectTable, ['event'])).to.have.rowCount(1)
     })
 
     it('should be safe to run multiple times', async function () {
       await initializeSchema(this.pgClient)
       await initializeSchema(this.pgClient)
-      const actual = await this.pgClient.query(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'recluse'"
-      )
 
-      expect(actual.rows).to.deep.include({table_name: 'global_offset'})
-      expect(actual.rows).to.deep.include({table_name: 'stream'})
-      expect(actual.rows).to.deep.include({table_name: 'event'})
+      const selectTable = "SELECT * FROM information_schema.tables WHERE table_schema = 'recluse' AND table_name = $1"
+      expect(await this.query(selectTable, ['global_offset'])).to.have.rowCount(1)
+      expect(await this.query(selectTable, ['stream'])).to.have.rowCount(1)
+      expect(await this.query(selectTable, ['event'])).to.have.rowCount(1)
     })
   })
 
@@ -39,28 +35,15 @@ describe('Events', pgSpec(function () {
         const type = 'stream-type-a'
         const name = 'stream-name-a'
         const start = 0
-        const events = [
-          {type: 'event-type-a', data: Buffer.from('a')},
-          {type: 'event-type-b', data: Buffer.from('b')},
-        ]
-
+        const eventA = {type: 'event-type-a', data: Buffer.from('a')}
+        const eventB = {type: 'event-type-b', data: Buffer.from('b')}
+        const events = [eventA, eventB]
         await appendEvents(this.pgClient, type, name, start, events)
-        const actualStream = await this.pgClient.query('SELECT * FROM recluse.stream WHERE name = $1', [name])
 
-        expect(actualStream.rowCount).to.equal(1)
-        expect(actualStream.rows[0]).to.include({type, name})
-
-        const {id: streamId} = actualStream.rows[0]
-        const actualEvents = await this.pgClient.query(
-          'SELECT * FROM recluse.event WHERE stream_id = $1 ORDER BY stream_offset',
-          [streamId]
-        )
-
-        expect(actualEvents.rowCount).to.equal(2)
-        expect(actualEvents.rows[0].type).to.equal(events[0].type)
-        expect(actualEvents.rows[0].data).to.equalBytes(events[0].data)
-        expect(actualEvents.rows[1].type).to.equal(events[1].type)
-        expect(actualEvents.rows[1].data).to.equalBytes(events[1].data)
+        const selectEvent =
+          'SELECT * FROM recluse.event WHERE stream_id = $1 AND stream_offset = $2 AND type = $3 AND data = $4'
+        expect(await this.query(selectEvent, [1, 0, eventA.type, eventA.data])).to.have.rowCount(1)
+        expect(await this.query(selectEvent, [1, 1, eventB.type, eventB.data])).to.have.rowCount(1)
       })
     })
   })

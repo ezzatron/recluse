@@ -9,6 +9,7 @@ function pgSpec (spec) {
     before(async function () {
       this.pgInitClient = createPgClient('postgres')
       this.pgClient = createPgClient('recluse_test')
+      this.query = this.pgClient.query.bind(this.pgClient)
 
       await this.pgInitClient.connect()
       await this.pgInitClient.query('DROP DATABASE IF EXISTS recluse_test')
