@@ -47,5 +47,29 @@ describe('Events', pgSpec(function () {
         expect(await this.query(selectEvent, [1, 1])).to.have.row(eventB)
       })
     })
+
+    context('with an existing stream', function () {
+      beforeEach(async function () {
+        await appendEvents(this.pgClient, type, name, 0, [eventA, eventB])
+      })
+
+      it('should be able to append to the stream', async function () {
+        expect(await appendEvents(this.pgClient, type, name, 2, [eventC, eventD])).to.be.true()
+        expect(await this.query(selectEvent, [1, 2])).to.have.row(eventC)
+        expect(await this.query(selectEvent, [1, 3])).to.have.row(eventD)
+      })
+
+      it('should fail if the specified offset is less than the next stream offset', async function () {
+        expect(await appendEvents(this.pgClient, type, name, 1, [eventC, eventD])).to.be.false()
+        expect(await this.query(selectEvent, [1, 2])).to.have.rowCount(0)
+        expect(await this.query(selectEvent, [1, 3])).to.have.rowCount(0)
+      })
+
+      it('should fail if the specified offset is greater than the next stream offset', async function () {
+        expect(await appendEvents(this.pgClient, type, name, 3, [eventC, eventD])).to.be.false()
+        expect(await this.query(selectEvent, [1, 2])).to.have.rowCount(0)
+        expect(await this.query(selectEvent, [1, 3])).to.have.rowCount(0)
+      })
+    })
   })
 }))
