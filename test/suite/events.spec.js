@@ -96,7 +96,6 @@ describe('Events', pgSpec(function () {
       })
 
       it('should record the global offset', async function () {
-        expect(await appendEvents(this.pgClient, typeA, nameA, 3, [eventC, eventD])).to.be.false()
         expect(await this.query(selectEvent, [0, 0])).to.have.row({...eventA, global_offset: '0'})
         expect(await this.query(selectEvent, [1, 0])).to.have.row({...eventB, global_offset: '1'})
         expect(await this.query(selectEvent, [0, 1])).to.have.row({...eventC, global_offset: '2'})
