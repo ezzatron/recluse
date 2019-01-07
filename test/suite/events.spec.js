@@ -1,5 +1,5 @@
 const {expect} = require('chai')
-const {pgSpec} = require('../helper.js')
+const {pgSpec, resolveOnCallback} = require('../helper.js')
 
 const {appendEvents, initializeSchema} = require('../../src/index.js')
 
@@ -100,6 +100,74 @@ describe('Events', pgSpec(function () {
         expect(await this.query(selectEvent, [1, 0])).to.have.row({...eventB, global_offset: '1'})
         expect(await this.query(selectEvent, [0, 1])).to.have.row({...eventC, global_offset: '2'})
         expect(await this.query(selectEvent, [1, 1])).to.have.row({...eventD, global_offset: '3'})
+      })
+    })
+
+    context('with multiple clients', function () {
+      beforeEach(async function () {
+        this.secondaryPgClient = this.createPgClient()
+        await this.secondaryPgClient.connect()
+      })
+
+      it('should not allow concurrent writes', async function () {
+        const actual = []
+        const log = message => { actual.push(message) }
+
+        await this.pgClient.query('BEGIN')
+        await this.secondaryPgClient.query('BEGIN')
+
+        const [appendAStarted, resolveAppendAStarted] = resolveOnCallback()
+        const [appendBStarted, resolveAppendBStarted] = resolveOnCallback()
+
+        const taskA = (async () => {
+          appendA1 = appendEvents(this.pgClient, typeA, nameA, 0, [eventA])
+          log('append A1 started')
+          resolveAppendAStarted()
+          resultA1 = await appendA1
+          log(`append A1 ${resultA1 ? 'succeeded' : 'failed'}`)
+          await appendBStarted
+          log('append A2 started')
+          resultA2 = await appendEvents(this.pgClient, typeA, nameA, 1, [eventB])
+          log(`append A2 ${resultA1 ? 'succeeded' : 'failed'}`)
+
+          if (resultA1 && resultA2) {
+            await this.pgClient.query('COMMIT')
+            log('transaction A committed')
+          } else {
+            await this.pgClient.query('ROLLBACK')
+            log('transaction A rolled back')
+          }
+        })()
+
+        const taskB = (async () => {
+          await appendAStarted
+          const appendB1 = appendEvents(this.secondaryPgClient, typeA, nameA, 0, [eventC])
+          log('append B1 started')
+          resolveAppendBStarted()
+          resultB1 = await appendB1
+          log(`append B1 ${resultB1 ? 'succeeded' : 'failed'}`)
+
+          if (resultB1) {
+            await this.secondaryPgClient.query('COMMIT')
+            log('transaction B committed')
+          } else {
+            await this.secondaryPgClient.query('ROLLBACK')
+            log('transaction B rolled back')
+          }
+        })()
+
+        await Promise.all([taskA, taskB])
+
+        expect(actual).to.deep.equal([
+          'append A1 started',
+          'append B1 started',
+          'append A1 succeeded',
+          'append A2 started',
+          'append A2 succeeded',
+          'transaction A committed',
+          'append B1 failed',
+          'transaction B rolled back',
+        ])
       })
     })
   })
