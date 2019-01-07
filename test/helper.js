@@ -10,6 +10,7 @@ function pgSpec (spec) {
       this.pgInitClient = createPgClient('postgres')
       this.pgClient = createPgClient('recluse_test')
       this.query = this.pgClient.query.bind(this.pgClient)
+      this.inTransaction = async (fn, pgClient = this.pgClient) => inTransaction(pgClient, fn)
 
       await this.pgInitClient.connect()
       await this.pgInitClient.query('DROP DATABASE IF EXISTS recluse_test')
@@ -47,4 +48,22 @@ function createPgClient (database) {
     password: PGPASSWORD || '',
     database,
   })
+}
+
+async function inTransaction (pgClient, fn) {
+  let result
+
+  await pgClient.query('BEGIN')
+
+  try {
+    result = await fn()
+  } catch (error) {
+    await pgClient.query('ROLLBACK')
+
+    throw error
+  }
+
+  await pgClient.query('COMMIT')
+
+  return result
 }

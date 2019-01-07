@@ -143,17 +143,3 @@ function readEvents (pgClient, name, offset = 0) {
     [name, offset]
   ))
 }
-
-async function inTransaction (pgClient, fn) {
-  await pgClient.query('BEGIN')
-
-  try {
-    await fn()
-  } catch (error) {
-    await pgClient.query('ROLLBACK')
-
-    throw error
-  }
-
-  await pgClient.query('COMMIT')
-}
