@@ -110,52 +110,42 @@ describe('Events', pgSpec(function () {
       })
 
       it('should not allow concurrent writes', async function () {
-        await this.pgClient.query('BEGIN')
+        // secondaryPgClient is first to start a transaction, but it doesn't automatically acquire a lock
         await this.secondaryPgClient.query('BEGIN')
+        await this.pgClient.query('BEGIN')
 
-        const [appendAStarted, resolveAppendAStarted] = resolveOnCallback()
-        const [appendBStarted, resolveAppendBStarted] = resolveOnCallback()
+        // this append acquires the lock for pgClient
+        await appendEvents(this.pgClient, typeA, nameA, 0, [eventA])
 
-        const taskA = (async () => {
-          appendA1 = appendEvents(this.pgClient, typeA, nameA, 0, [eventA])
-          resolveAppendAStarted()
-          resultA1 = await appendA1
-          await appendBStarted
-          resultA2 = await appendEvents(this.pgClient, typeA, nameA, 1, [eventB])
+        // this append will be started first, but must wait for pgClient's lock to be released to proceed
+        const appendB = async () => {
+          const result = await appendEvents(this.secondaryPgClient, typeA, nameA, 0, [eventC])
 
-          if (resultA1 && resultA2) {
-            await this.pgClient.query('COMMIT')
-
-            return true
-          }
-
-          try {
-            await this.pgClient.query('ROLLBACK')
-          } catch (e) {}
-
-          return false
-        })()
-
-        const taskB = (async () => {
-          await appendAStarted
-          const appendB1 = appendEvents(this.secondaryPgClient, typeA, nameA, 0, [eventC])
-          resolveAppendBStarted()
-          resultB1 = await appendB1
-
-          if (resultB1) {
+          if (result) {
             await this.secondaryPgClient.query('COMMIT')
-
-            return true
+          } else {
+            await this.secondaryPgClient.query('ROLLBACK')
           }
 
-          try {
-            await this.secondaryPgClient.query('ROLLBACK')
-          } catch (e) {}
+          return result
+        }
 
-          return false
-        })()
+        // this append will be started second, but can freely proceed since pgClient has the lock
+        const appendA = async () => {
+          const result = await appendEvents(this.pgClient, typeA, nameA, 1, [eventB])
 
-        const [resultA, resultB] = await Promise.all([taskA, taskB])
+          if (result) {
+            await this.pgClient.query('COMMIT')
+          } else {
+            await this.pgClient.query('ROLLBACK')
+          }
+
+          return result
+        }
+
+        // these have to be run in parallel
+        // awaiting appendB without also awaiting appendA would cause a deadlock
+        const [resultB, resultA] = await Promise.all([appendB(), appendA()])
 
         expect(resultA).to.be.true()
         expect(resultB).to.be.false()
