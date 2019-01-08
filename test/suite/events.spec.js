@@ -110,9 +110,6 @@ describe('Events', pgSpec(function () {
       })
 
       it('should not allow concurrent writes', async function () {
-        const actual = []
-        const log = message => { actual.push(message) }
-
         await this.pgClient.query('BEGIN')
         await this.secondaryPgClient.query('BEGIN')
 
@@ -121,53 +118,50 @@ describe('Events', pgSpec(function () {
 
         const taskA = (async () => {
           appendA1 = appendEvents(this.pgClient, typeA, nameA, 0, [eventA])
-          log('append A1 started')
           resolveAppendAStarted()
           resultA1 = await appendA1
-          log(`append A1 ${resultA1 ? 'succeeded' : 'failed'}`)
           await appendBStarted
-          log('append A2 started')
           resultA2 = await appendEvents(this.pgClient, typeA, nameA, 1, [eventB])
-          log(`append A2 ${resultA1 ? 'succeeded' : 'failed'}`)
 
           if (resultA1 && resultA2) {
             await this.pgClient.query('COMMIT')
-            log('transaction A committed')
-          } else {
-            await this.pgClient.query('ROLLBACK')
-            log('transaction A rolled back')
+
+            return true
           }
+
+          try {
+            await this.pgClient.query('ROLLBACK')
+          } catch (e) {}
+
+          return false
         })()
 
         const taskB = (async () => {
           await appendAStarted
           const appendB1 = appendEvents(this.secondaryPgClient, typeA, nameA, 0, [eventC])
-          log('append B1 started')
           resolveAppendBStarted()
           resultB1 = await appendB1
-          log(`append B1 ${resultB1 ? 'succeeded' : 'failed'}`)
 
           if (resultB1) {
             await this.secondaryPgClient.query('COMMIT')
-            log('transaction B committed')
-          } else {
-            await this.secondaryPgClient.query('ROLLBACK')
-            log('transaction B rolled back')
+
+            return true
           }
+
+          try {
+            await this.secondaryPgClient.query('ROLLBACK')
+          } catch (e) {}
+
+          return false
         })()
 
-        await Promise.all([taskA, taskB])
+        const [resultA, resultB] = await Promise.all([taskA, taskB])
 
-        expect(actual).to.deep.equal([
-          'append A1 started',
-          'append B1 started',
-          'append A1 succeeded',
-          'append A2 started',
-          'append A2 succeeded',
-          'transaction A committed',
-          'append B1 failed',
-          'transaction B rolled back',
-        ])
+        expect(resultA).to.be.true()
+        expect(resultB).to.be.false()
+        expect(await this.query(selectEvent, [0, 0])).to.have.row(eventA)
+        expect(await this.query(selectEvent, [0, 1])).to.have.row(eventB)
+        expect(await this.query(selectEvent, [0, 2])).to.have.rowCount(0)
       })
     })
   })
