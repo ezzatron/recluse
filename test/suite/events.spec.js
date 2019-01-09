@@ -1,5 +1,5 @@
 const {expect} = require('chai')
-const {pgSpec} = require('../helper.js')
+const {pgSpec, resolveOnCallback} = require('../helper.js')
 
 const {appendEvents, initializeSchema} = require('../../src/index.js')
 
@@ -100,6 +100,58 @@ describe('Events', pgSpec(function () {
         expect(await this.query(selectEvent, [1, 0])).to.have.row({...eventB, global_offset: '1'})
         expect(await this.query(selectEvent, [0, 1])).to.have.row({...eventC, global_offset: '2'})
         expect(await this.query(selectEvent, [1, 1])).to.have.row({...eventD, global_offset: '3'})
+      })
+    })
+
+    context('with multiple clients', function () {
+      beforeEach(async function () {
+        this.secondaryPgClient = this.createPgClient()
+        await this.secondaryPgClient.connect()
+      })
+
+      it('should not allow concurrent writes', async function () {
+        // secondaryPgClient is first to start a transaction, but it doesn't automatically acquire a lock
+        await this.secondaryPgClient.query('BEGIN')
+        await this.pgClient.query('BEGIN')
+
+        // this append acquires the lock for pgClient
+        await appendEvents(this.pgClient, typeA, nameA, 0, [eventA])
+
+        // this append will be started first, but must wait for pgClient's lock to be released to proceed
+        const appendB = async () => {
+          const result = await appendEvents(this.secondaryPgClient, typeA, nameA, 0, [eventC])
+
+          if (result) {
+            await this.secondaryPgClient.query('COMMIT')
+          } else {
+            await this.secondaryPgClient.query('ROLLBACK')
+          }
+
+          return result
+        }
+
+        // this append will be started second, but can freely proceed since pgClient has the lock
+        const appendA = async () => {
+          const result = await appendEvents(this.pgClient, typeA, nameA, 1, [eventB])
+
+          if (result) {
+            await this.pgClient.query('COMMIT')
+          } else {
+            await this.pgClient.query('ROLLBACK')
+          }
+
+          return result
+        }
+
+        // these have to be run in parallel
+        // awaiting appendB without also awaiting appendA would cause a deadlock
+        const [resultB, resultA] = await Promise.all([appendB(), appendA()])
+
+        expect(resultA).to.be.true()
+        expect(resultB).to.be.false()
+        expect(await this.query(selectEvent, [0, 0])).to.have.row(eventA)
+        expect(await this.query(selectEvent, [0, 1])).to.have.row(eventB)
+        expect(await this.query(selectEvent, [0, 2])).to.have.rowCount(0)
       })
     })
   })

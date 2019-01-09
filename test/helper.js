@@ -2,13 +2,23 @@ const {Client: PgClient} = require('pg')
 
 module.exports = {
   pgSpec,
+  resolveOnCallback,
 }
 
 function pgSpec (spec) {
   return function () {
     before(async function () {
       this.pgInitClient = createPgClient('postgres')
-      this.pgClient = createPgClient('recluse_test')
+
+      this.pgClients = []
+      this.createPgClient = () => {
+        const client = createPgClient('recluse_test')
+        this.pgClients.push(client)
+
+        return client
+      }
+
+      this.pgClient = this.createPgClient()
       this.query = this.pgClient.query.bind(this.pgClient)
       this.inTransaction = async (fn, pgClient = this.pgClient) => inTransaction(pgClient, fn)
 
@@ -23,9 +33,11 @@ function pgSpec (spec) {
     })
 
     after(async function () {
-      try {
-        await this.pgClient.end()
-      } catch (error) {}
+      for (const client of this.pgClients) {
+        try {
+          await client.end()
+        } catch (error) {}
+      }
 
       await this.pgInitClient.query('DROP DATABASE recluse_test')
 
@@ -66,4 +78,11 @@ async function inTransaction (pgClient, fn) {
   await pgClient.query('COMMIT')
 
   return result
+}
+
+function resolveOnCallback () {
+  let resolver
+  const promise = new Promise(resolve => { resolver = resolve })
+
+  return [promise, resolver]
 }
