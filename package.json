@@ -14,9 +14,17 @@
     "chai": "^4.2.0",
     "chai-bytes": "^0.1.2",
     "dirty-chai": "^2.0.1",
+    "eslint": "^5.12.0",
+    "eslint-config-standard": "^12.0.0",
+    "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-mocha": "^5.2.1",
+    "eslint-plugin-node": "^8.0.1",
+    "eslint-plugin-promise": "^4.0.1",
+    "eslint-plugin-standard": "^4.0.0",
     "mocha": "^5.2.0"
   },
   "scripts": {
+    "lint": "eslint --fix .",
     "test": "mocha test/suite/**/*.spec.js"
   }
 }
