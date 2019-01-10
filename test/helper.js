@@ -1,3 +1,5 @@
+/* eslint-disable mocha/no-top-level-hooks */
+
 const {Client: PgClient} = require('pg')
 
 module.exports = {

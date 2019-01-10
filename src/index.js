@@ -3,6 +3,7 @@ const {asyncQuery} = require('./pg.js')
 module.exports = {
   appendEvents,
   initializeSchema,
+  readEvents,
 }
 
 const UNIQUE_VIOLATION = '23505'
@@ -133,7 +134,7 @@ async function appendEvents (pgClient, type, name, start, events) {
 }
 
 function readEvents (pgClient, name, offset = 0) {
-  return client.query(asyncQuery(
+  return pgClient.query(asyncQuery(
     `
     SELECT e.* FROM recluse.event AS e
     INNER JOIN recluse.stream AS s ON s.id = e.stream_id

@@ -1,5 +1,5 @@
 const {expect} = require('chai')
-const {pgSpec, resolveOnCallback} = require('../helper.js')
+const {pgSpec} = require('../helper.js')
 
 const {appendEvents, initializeSchema} = require('../../src/index.js')
 

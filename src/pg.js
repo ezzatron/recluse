@@ -22,7 +22,7 @@ function createCursorIterator (cursor) {
 
   return {
     next () {
-      return new Promise ((resolve, reject) => {
+      return new Promise((resolve, reject) => {
         if (done) return resolve({done})
 
         cursor.read(1, (error, rows, result) => {
@@ -35,6 +35,6 @@ function createCursorIterator (cursor) {
           resolve({done, value: rows[0]})
         })
       })
-    }
+    },
   }
 }
