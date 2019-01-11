@@ -24,6 +24,7 @@
     "mocha": "^5.2.0"
   },
   "scripts": {
+    "ci-lint": "eslint .",
     "lint": "eslint --fix .",
     "test": "mocha test/suite/**/*.spec.js"
   }
