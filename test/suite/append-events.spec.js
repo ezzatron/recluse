@@ -139,4 +139,22 @@ describe('appendEvents()', pgSpec(function () {
       expect(events[1]).to.have.fields(eventB)
     })
   })
+
+  context('with other clients listening for events', function () {
+    beforeEach(async function () {
+      this.secondaryPgClient = this.createPgClient()
+      await this.secondaryPgClient.connect()
+      await this.secondaryPgClient.query('LISTEN recluse_event')
+    })
+
+    it('should notify listening clients when appending events', function (done) {
+      this.secondaryPgClient.on('notification', notification => {
+        expect(notification.channel).to.equal('recluse_event')
+        done()
+      })
+
+      this.inTransaction(async () => appendEvents(this.pgClient, typeA, nameA, 0, [eventA]))
+        .catch(done)
+    })
+  })
 }))

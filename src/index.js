@@ -131,6 +131,8 @@ async function appendEvents (pgClient, type, name, start, events) {
     await insertEvent(pgClient, offset + i, streamId, start + i, events[i])
   }
 
+  await pgClient.query('NOTIFY recluse_event')
+
   return true
 }
 
