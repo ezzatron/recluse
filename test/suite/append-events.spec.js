@@ -1,7 +1,7 @@
 const {expect} = require('chai')
-const {pgSpec} = require('../helper.js')
+const {asyncIterableToArray, pgSpec} = require('../helper.js')
 
-const {appendEvents, initializeSchema} = require('../../src/index.js')
+const {appendEvents, initializeSchema, readEvents, readEventsByStream} = require('../../src/index.js')
 
 describe('appendEvents()', pgSpec(function () {
   const typeA = 'stream-type-a'
@@ -14,8 +14,6 @@ describe('appendEvents()', pgSpec(function () {
   const eventC = {type: eventTypeA, data: Buffer.from('c')}
   const eventD = {type: eventTypeB, data: Buffer.from('d')}
 
-  const selectEvent = 'SELECT * FROM recluse.event WHERE stream_id = $1 AND stream_offset = $2'
-
   beforeEach(async function () {
     await initializeSchema(this.pgClient)
   })
@@ -24,10 +22,12 @@ describe('appendEvents()', pgSpec(function () {
     it('should be able to append to the stream', async function () {
       const wasAppended =
         await this.inTransaction(async () => appendEvents(this.pgClient, typeA, nameA, 0, [eventA, eventB]))
+      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA))
 
       expect(wasAppended).to.be.true()
-      expect(await this.query(selectEvent, [0, 0])).to.have.row(eventA)
-      expect(await this.query(selectEvent, [0, 1])).to.have.row(eventB)
+      expect(events).to.have.length(2)
+      expect(events[0]).to.have.fields(eventA)
+      expect(events[1]).to.have.fields(eventB)
     })
   })
 
@@ -40,28 +40,30 @@ describe('appendEvents()', pgSpec(function () {
       const wasAppended = await this.inTransaction(
         async () => appendEvents(this.pgClient, typeA, nameA, 2, [eventC, eventD])
       )
+      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA, 2))
 
       expect(wasAppended).to.be.true()
-      expect(await this.query(selectEvent, [0, 2])).to.have.row(eventC)
-      expect(await this.query(selectEvent, [0, 3])).to.have.row(eventD)
+      expect(events).to.have.length(2)
+      expect(events[0]).to.have.fields(eventC)
+      expect(events[1]).to.have.fields(eventD)
     })
 
     it('should fail if the specified offset is less than the next stream offset', async function () {
       const wasAppended =
         await this.inTransaction(async () => appendEvents(this.pgClient, typeA, nameA, 1, [eventC, eventD]))
+      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA))
 
       expect(wasAppended).to.be.false()
-      expect(await this.query(selectEvent, [0, 2])).to.have.rowCount(0)
-      expect(await this.query(selectEvent, [0, 3])).to.have.rowCount(0)
+      expect(events).to.have.length(2)
     })
 
     it('should fail if the specified offset is greater than the next stream offset', async function () {
       const wasAppended =
         await this.inTransaction(async () => appendEvents(this.pgClient, typeA, nameA, 3, [eventC, eventD]))
+      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA))
 
       expect(wasAppended).to.be.false()
-      expect(await this.query(selectEvent, [0, 2])).to.have.rowCount(0)
-      expect(await this.query(selectEvent, [0, 3])).to.have.rowCount(0)
+      expect(events).to.have.length(2)
     })
   })
 
@@ -74,10 +76,13 @@ describe('appendEvents()', pgSpec(function () {
     })
 
     it('should record the global offset', async function () {
-      expect(await this.query(selectEvent, [0, 0])).to.have.row({...eventA, global_offset: '0'})
-      expect(await this.query(selectEvent, [1, 0])).to.have.row({...eventB, global_offset: '1'})
-      expect(await this.query(selectEvent, [0, 1])).to.have.row({...eventC, global_offset: '2'})
-      expect(await this.query(selectEvent, [1, 1])).to.have.row({...eventD, global_offset: '3'})
+      const [events] = await asyncIterableToArray(readEvents(this.pgClient))
+
+      expect(events).to.have.length(4)
+      expect(events[0]).to.have.fields({...eventA, global_offset: '0'})
+      expect(events[1]).to.have.fields({...eventB, global_offset: '1'})
+      expect(events[2]).to.have.fields({...eventC, global_offset: '2'})
+      expect(events[3]).to.have.fields({...eventD, global_offset: '3'})
     })
   })
 
@@ -125,11 +130,13 @@ describe('appendEvents()', pgSpec(function () {
       // awaiting appendB without also awaiting appendA would cause a deadlock
       const [resultB, resultA] = await Promise.all([appendB(), appendA()])
 
+      const [events] = await asyncIterableToArray(readEvents(this.pgClient))
+
       expect(resultA).to.be.true()
       expect(resultB).to.be.false()
-      expect(await this.query(selectEvent, [0, 0])).to.have.row(eventA)
-      expect(await this.query(selectEvent, [0, 1])).to.have.row(eventB)
-      expect(await this.query(selectEvent, [0, 2])).to.have.rowCount(0)
+      expect(events).to.have.length(2)
+      expect(events[0]).to.have.fields(eventA)
+      expect(events[1]).to.have.fields(eventB)
     })
   })
 }))
