@@ -1,7 +1,7 @@
 const {expect} = require('chai')
 const {asyncIterableToArray, pgSpec} = require('../helper.js')
 
-const {appendEvents, readEvents} = require('../../src/index.js')
+const {appendEvents, readEvents} = require('../../src/event.js')
 const {initializeSchema} = require('../../src/schema.js')
 
 describe('readEvents()', pgSpec(function () {
