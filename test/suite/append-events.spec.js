@@ -22,10 +22,10 @@ describe('appendEvents()', pgSpec(function () {
 
   context('with a new stream', function () {
     it('should be able to append to the stream', async function () {
-      const actual =
+      const wasAppended =
         await this.inTransaction(async () => appendEvents(this.pgClient, typeA, nameA, 0, [eventA, eventB]))
 
-      expect(actual).to.be.true()
+      expect(wasAppended).to.be.true()
       expect(await this.query(selectEvent, [0, 0])).to.have.row(eventA)
       expect(await this.query(selectEvent, [0, 1])).to.have.row(eventB)
     })
@@ -37,29 +37,29 @@ describe('appendEvents()', pgSpec(function () {
     })
 
     it('should be able to append to the stream', async function () {
-      const actual = await this.inTransaction(
+      const wasAppended = await this.inTransaction(
         async () => appendEvents(this.pgClient, typeA, nameA, 2, [eventC, eventD])
       )
 
-      expect(actual).to.be.true()
+      expect(wasAppended).to.be.true()
       expect(await this.query(selectEvent, [0, 2])).to.have.row(eventC)
       expect(await this.query(selectEvent, [0, 3])).to.have.row(eventD)
     })
 
     it('should fail if the specified offset is less than the next stream offset', async function () {
-      const actual =
+      const wasAppended =
         await this.inTransaction(async () => appendEvents(this.pgClient, typeA, nameA, 1, [eventC, eventD]))
 
-      expect(actual).to.be.false()
+      expect(wasAppended).to.be.false()
       expect(await this.query(selectEvent, [0, 2])).to.have.rowCount(0)
       expect(await this.query(selectEvent, [0, 3])).to.have.rowCount(0)
     })
 
     it('should fail if the specified offset is greater than the next stream offset', async function () {
-      const actual =
+      const wasAppended =
         await this.inTransaction(async () => appendEvents(this.pgClient, typeA, nameA, 3, [eventC, eventD]))
 
-      expect(actual).to.be.false()
+      expect(wasAppended).to.be.false()
       expect(await this.query(selectEvent, [0, 2])).to.have.rowCount(0)
       expect(await this.query(selectEvent, [0, 3])).to.have.rowCount(0)
     })
