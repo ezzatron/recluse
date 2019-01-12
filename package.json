@@ -29,6 +29,7 @@
     "coverage": "nyc mocha test/suite/**/*.spec.js",
     "coverage-open": "open artifacts/tests/coverage/html/index.html",
     "lint": "eslint --fix .",
+    "prepare": "yarn test && yarn ci-lint",
     "test": "mocha test/suite/**/*.spec.js"
   }
 }
