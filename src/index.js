@@ -3,6 +3,7 @@ const {asyncQuery} = require('./pg.js')
 module.exports = {
   appendEvents,
   initializeSchema,
+  readEvents,
   readEventsByStream,
 }
 
@@ -131,6 +132,13 @@ async function appendEvents (pgClient, type, name, start, events) {
   }
 
   return true
+}
+
+function readEvents (pgClient, offset = 0) {
+  return pgClient.query(asyncQuery(
+    'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
+    [offset]
+  ))
 }
 
 function readEventsByStream (pgClient, name, offset = 0) {
