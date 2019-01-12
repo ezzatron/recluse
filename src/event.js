@@ -6,54 +6,6 @@ module.exports = {
   readEventsByStream,
 }
 
-async function insertStream (pgClient, type, name, next) {
-  let result
-
-  try {
-    result = await pgClient.query(
-      'INSERT INTO recluse.stream (type, name, next) VALUES ($1, $2, $3) RETURNING id',
-      [type, name, next]
-    )
-  } catch (error) {
-    if (error.code === UNIQUE_VIOLATION) return [false, null]
-
-    throw error
-  }
-
-  return [true, result.rows[0].id]
-}
-
-async function updateStreamOffset (pgClient, name, start, next) {
-  const result = await pgClient.query(
-    'UPDATE recluse.stream SET next = $1 WHERE name = $2 AND next = $3 RETURNING id',
-    [next, name, start]
-  )
-
-  return result.rowCount > 0 ? [true, result.rows[0].id] : [false, null]
-}
-
-async function updateGlobalOffset (pgClient, count) {
-  const result = await pgClient.query(
-    `
-    INSERT INTO recluse.global_offset AS go (next) VALUES ($1)
-    ON CONFLICT (id) DO UPDATE SET next = go.next + $1
-    RETURNING next
-    `,
-    [count]
-  )
-
-  return result.rows[0].next - count
-}
-
-async function insertEvent (pgClient, offset, streamId, streamOffset, event) {
-  const {type, data} = event
-
-  await pgClient.query(
-    'INSERT INTO recluse.event (global_offset, type, stream_id, stream_offset, data) VALUES ($1, $2, $3, $4, $5)',
-    [offset, type, streamId, streamOffset, data]
-  )
-}
-
 async function appendEvents (pgClient, type, name, start, events) {
   const count = events.length
   const next = start + count
@@ -92,4 +44,52 @@ function readEventsByStream (pgClient, name, offset = 0) {
     `,
     [name, offset]
   ))
+}
+
+async function insertEvent (pgClient, offset, streamId, streamOffset, event) {
+  const {type, data} = event
+
+  await pgClient.query(
+    'INSERT INTO recluse.event (global_offset, type, stream_id, stream_offset, data) VALUES ($1, $2, $3, $4, $5)',
+    [offset, type, streamId, streamOffset, data]
+  )
+}
+
+async function insertStream (pgClient, type, name, next) {
+  let result
+
+  try {
+    result = await pgClient.query(
+      'INSERT INTO recluse.stream (type, name, next) VALUES ($1, $2, $3) RETURNING id',
+      [type, name, next]
+    )
+  } catch (error) {
+    if (error.code === UNIQUE_VIOLATION) return [false, null]
+
+    throw error
+  }
+
+  return [true, result.rows[0].id]
+}
+
+async function updateGlobalOffset (pgClient, count) {
+  const result = await pgClient.query(
+    `
+    INSERT INTO recluse.global_offset AS go (next) VALUES ($1)
+    ON CONFLICT (id) DO UPDATE SET next = go.next + $1
+    RETURNING next
+    `,
+    [count]
+  )
+
+  return result.rows[0].next - count
+}
+
+async function updateStreamOffset (pgClient, name, start, next) {
+  const result = await pgClient.query(
+    'UPDATE recluse.stream SET next = $1 WHERE name = $2 AND next = $3 RETURNING id',
+    [next, name, start]
+  )
+
+  return result.rowCount > 0 ? [true, result.rows[0].id] : [false, null]
 }
