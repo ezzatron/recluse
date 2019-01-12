@@ -1,12 +1,10 @@
-const {asyncQuery} = require('./pg.js')
+const {asyncQuery, UNIQUE_VIOLATION} = require('./pg.js')
 
 module.exports = {
   appendEvents,
   readEvents,
   readEventsByStream,
 }
-
-const UNIQUE_VIOLATION = '23505'
 
 async function insertStream (pgClient, type, name, next) {
   let result

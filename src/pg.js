@@ -1,7 +1,11 @@
 const Cursor = require('pg-cursor')
 
+const UNIQUE_VIOLATION = '23505'
+
 module.exports = {
   asyncQuery,
+
+  UNIQUE_VIOLATION,
 }
 
 function asyncQuery (text, values) {
