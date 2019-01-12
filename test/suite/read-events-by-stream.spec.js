@@ -1,7 +1,8 @@
 const {expect} = require('chai')
 const {asyncIterableToArray, pgSpec} = require('../helper.js')
 
-const {appendEvents, initializeSchema, readEventsByStream} = require('../../src/index.js')
+const {appendEvents, readEventsByStream} = require('../../src/index.js')
+const {initializeSchema} = require('../../src/schema.js')
 
 describe('readEventsByStream()', pgSpec(function () {
   const typeA = 'stream-type-a'
