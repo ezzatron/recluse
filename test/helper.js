@@ -3,6 +3,7 @@
 const {Client: PgClient} = require('pg')
 
 module.exports = {
+  asyncIterableToArray,
   pgSpec,
   resolveOnCallback,
 }
@@ -87,4 +88,29 @@ function resolveOnCallback () {
   const promise = new Promise(resolve => { resolver = resolve })
 
   return [promise, resolver]
+}
+
+async function asyncIterableToArray (iterable) {
+  if (iterable == null) throw new Error('Not an object')
+
+  const iteratorFactory = iterable[Symbol.asyncIterator]
+
+  if (typeof iteratorFactory !== 'function') throw new Error('Not an async iterable')
+
+  const iterator = iteratorFactory()
+  const array = []
+  let returnValue
+  let value, done
+
+  do {
+    ({value, done} = await iterator.next())
+
+    if (done) {
+      returnValue = value
+    } else {
+      array.push(value)
+    }
+  } while (!done)
+
+  return [array, returnValue]
 }

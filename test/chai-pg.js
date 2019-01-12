@@ -23,11 +23,23 @@ module.exports = (chai, utils) => {
 
     const [row] = subject.rows
 
-    for (const field in fields) {
-      const actual = row[field]
-      const expected = fields[field]
+    new Assertion(row).to.have.fields(fields)
+  })
 
-      if (Buffer.isBuffer(expected)) {
+  Assertion.addMethod('fields', function (fields) {
+    const subject = this._obj
+
+    new Assertion(subject).to.be.an('object')
+    new Assertion(subject).to.not.be.null()
+
+    for (const field in fields) {
+      const actual = subject[field]
+      const expected = fields[field]
+      const type = typeof expected
+
+      if (type === 'function') {
+        new Assertion(actual).to.be.an.instanceOf(expected)
+      } else if (Buffer.isBuffer(expected)) {
         new Assertion(actual, `expected ${field} bytes to match`)
           .to.equalBytes(expected)
       } else {

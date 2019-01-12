@@ -9,9 +9,13 @@ function asyncQuery (text, values) {
   const iterator = createCursorIterator(cursor)
 
   return {
-    submit (connection) {
-      cursor.submit(connection)
-    },
+    handleCommandComplete: cursor.handleCommandComplete.bind(cursor),
+    handleDataRow: cursor.handleDataRow.bind(cursor),
+    handleError: cursor.handleError.bind(cursor),
+    handlePortalSuspended: cursor.handlePortalSuspended.bind(cursor),
+    handleReadyForQuery: cursor.handleReadyForQuery.bind(cursor),
+    handleRowDescription: cursor.handleRowDescription.bind(cursor),
+    submit: cursor.submit.bind(cursor),
 
     [Symbol.asyncIterator]: () => iterator,
   }
