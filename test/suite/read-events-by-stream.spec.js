@@ -1,9 +1,9 @@
 const {expect} = require('chai')
 const {asyncIterableToArray, pgSpec} = require('../helper.js')
 
-const {appendEvents, initializeSchema, readEvents} = require('../../src/index.js')
+const {appendEvents, initializeSchema, readEventsByStream} = require('../../src/index.js')
 
-describe('readEvents()', pgSpec(function () {
+describe('readEventsByStream()', pgSpec(function () {
   const typeA = 'stream-type-a'
   const nameA = 'stream-name-a'
   const nameB = 'stream-name-b'
@@ -22,13 +22,13 @@ describe('readEvents()', pgSpec(function () {
 
   context('with an empty stream', function () {
     it('should return an empty result for offset 0', async function () {
-      const [actual] = await asyncIterableToArray(readEvents(this.pgClient, nameA))
+      const [actual] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA))
 
       expect(actual).to.have.length(0)
     })
 
     it('should return an empty result for positive offsets', async function () {
-      const [actual] = await asyncIterableToArray(readEvents(this.pgClient, nameA, 111))
+      const [actual] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA, 111))
 
       expect(actual).to.have.length(0)
     })
@@ -40,7 +40,7 @@ describe('readEvents()', pgSpec(function () {
     })
 
     it('should return the correct events for offset 0', async function () {
-      const [actual] = await asyncIterableToArray(readEvents(this.pgClient, nameA))
+      const [actual] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA))
 
       expect(actual).to.have.length(2)
       expect(actual[0]).to.have.fields({
@@ -62,7 +62,7 @@ describe('readEvents()', pgSpec(function () {
     })
 
     it('should return the correct events for positive offsets that exist', async function () {
-      const [actual] = await asyncIterableToArray(readEvents(this.pgClient, nameA, 1))
+      const [actual] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA, 1))
 
       expect(actual).to.have.length(1)
       expect(actual[0]).to.have.fields({
@@ -76,7 +76,7 @@ describe('readEvents()', pgSpec(function () {
     })
 
     it('should return an empty result for positive offsets that do not exist', async function () {
-      const [actual] = await asyncIterableToArray(readEvents(this.pgClient, nameA, 111))
+      const [actual] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA, 111))
 
       expect(actual).to.have.length(0)
     })
@@ -89,7 +89,7 @@ describe('readEvents()', pgSpec(function () {
     })
 
     it('should only return the events for the requested stream', async function () {
-      const [actual] = await asyncIterableToArray(readEvents(this.pgClient, nameA))
+      const [actual] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA))
 
       expect(actual).to.have.length(2)
       expect(actual[0]).to.have.fields(eventA)
