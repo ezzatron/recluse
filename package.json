@@ -21,10 +21,13 @@
     "eslint-plugin-node": "^8.0.1",
     "eslint-plugin-promise": "^4.0.1",
     "eslint-plugin-standard": "^4.0.0",
-    "mocha": "^5.2.0"
+    "mocha": "^5.2.0",
+    "nyc": "^13.1.0"
   },
   "scripts": {
     "ci-lint": "eslint .",
+    "coverage": "nyc mocha test/suite/**/*.spec.js",
+    "coverage-open": "open artifacts/tests/coverage/html/index.html",
     "lint": "eslint --fix .",
     "test": "mocha test/suite/**/*.spec.js"
   }
