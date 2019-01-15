@@ -3,6 +3,7 @@ const {asyncIterableToArray, pgSpec} = require('../helper.js')
 
 const {appendEvents, readEvents, readEventsByStream} = require('../../src/event.js')
 const {initializeSchema} = require('../../src/schema.js')
+const {waitForNotification} = require('../../src/pg.js')
 
 describe('appendEvents()', pgSpec(function () {
   const typeA = 'stream-type-a'
@@ -145,17 +146,17 @@ describe('appendEvents()', pgSpec(function () {
     beforeEach(async function () {
       this.secondaryPgClient = this.createPgClient()
       await this.secondaryPgClient.connect()
-      await this.secondaryPgClient.query('LISTEN recluse_event')
+
+      this.waitForEvent = waitForNotification(this.secondaryPgClient, 'recluse_event')
     })
 
-    it('should notify listening clients when appending events', function (done) {
-      this.secondaryPgClient.on('notification', notification => {
-        expect(notification.channel).to.equal('recluse_event')
-        done()
-      })
+    it('should notify listening clients when appending events', async function () {
+      const [notification] = await Promise.all([
+        this.waitForEvent,
+        this.inTransaction(async () => appendEvents(this.pgClient, typeA, nameA, 0, [eventA])),
+      ])
 
-      this.inTransaction(async () => appendEvents(this.pgClient, typeA, nameA, 0, [eventA]))
-        .catch(done)
+      expect(notification.channel).to.equal('recluse_event')
     })
   })
 }))

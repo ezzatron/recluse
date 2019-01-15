@@ -4,6 +4,7 @@ const UNIQUE_VIOLATION = '23505'
 
 module.exports = {
   asyncQuery,
+  waitForNotification,
 
   UNIQUE_VIOLATION,
 }
@@ -23,6 +24,41 @@ function asyncQuery (text, values) {
 
     [Symbol.asyncIterator]: () => iterator,
   }
+}
+
+async function waitForNotification (client, channel) {
+  await client.query(`LISTEN ${channel}`)
+  let notification
+
+  try {
+    notification = await new Promise((resolve, reject) => {
+      function onEnd (error) {
+        removeListeners()
+        reject(error)
+      }
+
+      function onNotification (notification) {
+        if (notification.channel !== channel) return
+
+        removeListeners()
+        resolve(notification)
+      }
+
+      function removeListeners () {
+        client.removeListener('end', onEnd)
+        client.removeListener('error', onEnd)
+        client.removeListener('notification', onNotification)
+      }
+
+      client.on('end', onEnd)
+      client.on('error', onEnd)
+      client.on('notification', onNotification)
+    })
+  } finally {
+    await client.query(`UNLISTEN ${channel}`)
+  }
+
+  return notification
 }
 
 function createCursorIterator (cursor) {
