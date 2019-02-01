@@ -63,18 +63,23 @@ async function waitForNotification (client, channel) {
 
 function createCursorIterator (cursor) {
   let done = false
+  let final
 
   return {
     next () {
       return new Promise((resolve, reject) => {
-        if (done) return resolve({done})
+        if (done) return resolve({done, value: final})
 
         cursor.read(1, (error, rows, result) => {
           if (error) return reject(error)
 
           done = rows.length < 1
 
-          if (done) return resolve({done, value: result})
+          if (done) {
+            final = result
+
+            return resolve({done, value: final})
+          }
 
           resolve({done, value: rows[0]})
         })
