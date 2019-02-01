@@ -66,24 +66,27 @@ function createCursorIterator (cursor) {
   let final
 
   return {
-    next () {
-      return new Promise((resolve, reject) => {
-        if (done) return resolve({done, value: final})
+    async next () {
+      if (done) return {done, value: final}
 
-        cursor.read(1, (error, rows, result) => {
-          if (error) return reject(error)
+      const [rows, result] = await cursorRead(cursor, 1)
+      done = rows.length < 1
 
-          done = rows.length < 1
+      if (!done) return {done, value: rows[0]}
 
-          if (done) {
-            final = result
+      final = result
 
-            return resolve({done, value: final})
-          }
-
-          resolve({done, value: rows[0]})
-        })
-      })
+      return {done, value: final}
     },
   }
+}
+
+function cursorRead (cursor, rowCount) {
+  return new Promise((resolve, reject) => {
+    cursor.read(rowCount, (error, rows, result) => {
+      if (error) return reject(error)
+
+      resolve([rows, result])
+    })
+  })
 }
