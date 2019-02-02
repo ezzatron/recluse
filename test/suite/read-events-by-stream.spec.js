@@ -33,6 +33,10 @@ describe('readEventsByStream()', pgSpec(function () {
 
       expect(events).to.have.length(0)
     })
+
+    it('should support cancellation', async function () {
+      await readEventsByStream(this.pgClient, nameA).cancel()
+    })
   })
 
   context('with a non-empty stream', function () {
