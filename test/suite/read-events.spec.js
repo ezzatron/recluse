@@ -75,6 +75,17 @@ describe('readEvents()', pgSpec(function () {
 
       expect(events).to.have.length(0)
     })
+
+    it('should support cancellation', async function () {
+      const events = readEvents(this.pgClient)
+
+      for await (const event of events) {
+        expect(event).to.exist()
+
+        events.cancel()
+        break
+      }
+    })
   })
 
   context('with multiple non-empty streams', function () {

@@ -23,6 +23,7 @@ function asyncQuery (text, values) {
     submit: cursor.submit.bind(cursor),
 
     [Symbol.asyncIterator]: () => iterator,
+    cancel: iterator.cancel,
   }
 }
 
@@ -78,6 +79,10 @@ function createCursorIterator (cursor) {
 
       return {done, value: final}
     },
+
+    async cancel () {
+      await cursorClose(cursor)
+    },
   }
 }
 
@@ -88,5 +93,11 @@ function cursorRead (cursor, rowCount) {
 
       resolve([rows, result])
     })
+  })
+}
+
+function cursorClose (cursor) {
+  return new Promise((resolve, reject) => {
+    cursor.close(error => error ? reject(error) : resolve())
   })
 }
