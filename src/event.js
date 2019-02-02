@@ -6,6 +6,8 @@ module.exports = {
   readEventsByStream,
 }
 
+const EVENT_CHANNEL = 'recluse_event'
+
 async function appendEvents (pgClient, type, name, start, events) {
   const count = events.length
   const next = start + count
@@ -22,7 +24,7 @@ async function appendEvents (pgClient, type, name, start, events) {
     await insertEvent(pgClient, offset + i, streamId, start + i, events[i])
   }
 
-  await pgClient.query('NOTIFY recluse_event')
+  await pgClient.query(`NOTIFY ${EVENT_CHANNEL}`)
 
   return true
 }
