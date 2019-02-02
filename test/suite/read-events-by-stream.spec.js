@@ -85,7 +85,7 @@ describe('readEventsByStream()', pgSpec(function () {
       for await (const event of events) {
         expect(event).to.exist()
 
-        events.cancel()
+        await events.cancel()
         break
       }
     })
