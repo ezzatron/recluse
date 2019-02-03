@@ -1,6 +1,6 @@
 /* eslint-disable mocha/no-top-level-hooks */
 
-const {Client: PgClient} = require('pg')
+const {Client, Pool} = require('pg')
 
 module.exports = {
   asyncIterableToArray,
@@ -11,36 +11,43 @@ module.exports = {
 function pgSpec (spec) {
   return function () {
     before(async function () {
-      this.pgInitClient = createPgClient('postgres')
+      this.pgInitClient = createClient('postgres')
 
+      await this.pgInitClient.connect()
+      await this.pgInitClient.query('DROP DATABASE IF EXISTS recluse_test')
+      await this.pgInitClient.query('CREATE DATABASE recluse_test')
+
+      this.pgPool = createPool('recluse_test')
+    })
+
+    beforeEach(async function () {
       this.pgClients = []
-      this.createPgClient = () => {
-        const client = createPgClient('recluse_test')
+      this.createPgClient = async () => {
+        const client = await this.pgPool.connect()
         this.pgClients.push(client)
 
         return client
       }
 
-      this.pgClient = this.createPgClient()
+      this.pgClient = await this.createPgClient()
       this.query = this.pgClient.query.bind(this.pgClient)
       this.inTransaction = async (fn, pgClient = this.pgClient) => inTransaction(pgClient, fn)
-
-      await this.pgInitClient.connect()
-      await this.pgInitClient.query('DROP DATABASE IF EXISTS recluse_test')
-      await this.pgInitClient.query('CREATE DATABASE recluse_test')
-      await this.pgClient.connect()
     })
 
     afterEach(async function () {
+      for (const client of this.pgClients) {
+        try {
+          client.release()
+        } catch (error) {}
+      }
+
       await this.pgClient.query('DROP SCHEMA recluse CASCADE')
     })
 
     after(async function () {
-      for (const client of this.pgClients) {
-        try {
-          await client.end()
-        } catch (error) {}
-      }
+      try {
+        await this.pgPool.end()
+      } catch (error) {}
 
       await this.pgInitClient.query('DROP DATABASE recluse_test')
 
@@ -53,16 +60,20 @@ function pgSpec (spec) {
   }
 }
 
-function createPgClient (database) {
-  const {PGHOST, PGPORT, PGUSER, PGPASSWORD} = process.env
+const {PGHOST, PGPORT, PGUSER, PGPASSWORD} = process.env
+const connectOptions = {
+  host: PGHOST || 'localhost',
+  port: parseInt(PGPORT || '5432'),
+  user: PGUSER || 'postgres',
+  password: PGPASSWORD || '',
+}
 
-  return new PgClient({
-    host: PGHOST || 'localhost',
-    port: parseInt(PGPORT || '5432'),
-    user: PGUSER || 'postgres',
-    password: PGPASSWORD || '',
-    database,
-  })
+function createClient (database) {
+  return new Client({...connectOptions, database})
+}
+
+function createPool (database) {
+  return new Pool({...connectOptions, database})
 }
 
 async function inTransaction (pgClient, fn) {

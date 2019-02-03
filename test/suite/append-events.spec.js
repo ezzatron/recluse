@@ -90,8 +90,7 @@ describe('appendEvents()', pgSpec(function () {
 
   context('with multiple clients', function () {
     beforeEach(async function () {
-      this.secondaryPgClient = this.createPgClient()
-      await this.secondaryPgClient.connect()
+      this.secondaryPgClient = await this.createPgClient()
     })
 
     it('should not allow concurrent writes', async function () {
@@ -144,9 +143,7 @@ describe('appendEvents()', pgSpec(function () {
 
   context('with other clients listening for events', function () {
     beforeEach(async function () {
-      this.secondaryPgClient = this.createPgClient()
-      await this.secondaryPgClient.connect()
-
+      this.secondaryPgClient = await this.createPgClient()
       this.waitForEvent = waitForNotification(this.secondaryPgClient, 'recluse_event')
     })
 
