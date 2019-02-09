@@ -98,6 +98,6 @@ function cursorRead (cursor, rowCount) {
 
 function cursorClose (cursor) {
   return new Promise((resolve, reject) => {
-    cursor.close(error => error ? reject(error) : resolve())
+    cursor.close(error => { error ? reject(error) : resolve() })
   })
 }
