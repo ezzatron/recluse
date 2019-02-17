@@ -47,38 +47,29 @@ async function inTransaction (pgClient, fn) {
 }
 
 async function waitForNotification (client, channel) {
-  await client.query(`LISTEN ${channel}`)
-  let notification
+  return new Promise((resolve, reject) => {
+    function onEnd (error) {
+      removeListeners()
+      reject(error || new Error('Client disconnected while waiting for notification'))
+    }
 
-  try {
-    notification = await new Promise((resolve, reject) => {
-      function onEnd (error) {
-        removeListeners()
-        reject(error)
-      }
+    function onNotification (notification) {
+      if (notification.channel !== channel) return
 
-      function onNotification (notification) {
-        if (notification.channel !== channel) return
+      removeListeners()
+      resolve(notification)
+    }
 
-        removeListeners()
-        resolve(notification)
-      }
+    function removeListeners () {
+      client.removeListener('end', onEnd)
+      client.removeListener('error', onEnd)
+      client.removeListener('notification', onNotification)
+    }
 
-      function removeListeners () {
-        client.removeListener('end', onEnd)
-        client.removeListener('error', onEnd)
-        client.removeListener('notification', onNotification)
-      }
-
-      client.on('end', onEnd)
-      client.on('error', onEnd)
-      client.on('notification', onNotification)
-    })
-  } finally {
-    await client.query(`UNLISTEN ${channel}`)
-  }
-
-  return notification
+    client.on('end', onEnd)
+    client.on('error', onEnd)
+    client.on('notification', onNotification)
+  })
 }
 
 function createCursorIterator (cursor) {

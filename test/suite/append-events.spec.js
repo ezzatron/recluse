@@ -144,6 +144,7 @@ describe('appendEvents()', pgSpec(function () {
   context('with other clients listening for events', function () {
     beforeEach(async function () {
       this.secondaryPgClient = await this.createPgClient()
+      await this.secondaryPgClient.query('LISTEN recluse_event')
       this.waitForEvent = waitForNotification(this.secondaryPgClient, 'recluse_event')
     })
 
