@@ -58,4 +58,20 @@ async function initializeSchema (pgClient) {
       FOREIGN KEY (stream_id) REFERENCES recluse.stream (id)
     )
   `)
+
+  await pgClient.query(`
+    CREATE SEQUENCE IF NOT EXISTS recluse.projection_id_seq AS bigint MINVALUE 0
+  `)
+
+  await pgClient.query(`
+    CREATE TABLE IF NOT EXISTS recluse.projection
+    (
+      id bigint NOT NULL DEFAULT nextval('recluse.projection_id_seq'),
+      name text NOT NULL,
+      next bigint NOT NULL,
+
+      PRIMARY KEY (id),
+      UNIQUE (name)
+    )
+  `)
 }

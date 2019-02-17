@@ -1,9 +1,13 @@
-const {asyncQuery, UNIQUE_VIOLATION} = require('./pg.js')
+const {acquireAsyncIterator} = require('./iterator.js')
+const {allSerial} = require('./async.js')
+const {asyncQuery, waitForNotification, UNIQUE_VIOLATION} = require('./pg.js')
+const {systemClock} = require('./clock.js')
 
 module.exports = {
   appendEvents,
   readEvents,
   readEventsByStream,
+  readEventsContinuously,
 }
 
 const EVENT_CHANNEL = 'recluse_event'
@@ -46,6 +50,17 @@ function readEventsByStream (pgClient, name, offset = 0) {
     `,
     [name, offset]
   ))
+}
+
+function readEventsContinuously (pgClient, options = {}) {
+  const {offset = 0, timeout = 100, clock = systemClock} = options
+  const queryText = 'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset'
+  const iterator = createContinuousEventIterator(pgClient, queryText, offset, timeout, clock)
+
+  return {
+    [Symbol.asyncIterator]: () => iterator,
+    cancel: iterator.cancel,
+  }
 }
 
 async function insertEvent (pgClient, offset, streamId, streamOffset, event) {
@@ -94,4 +109,61 @@ async function updateStreamOffset (pgClient, name, start, next) {
   )
 
   return result.rowCount > 0 ? [true, result.rows[0].id] : [false, null]
+}
+
+function createContinuousEventIterator (pgClient, queryText, offset, timeout, clock) {
+  let next = offset
+  let isListening = false
+  let iterator = null
+  let nextNotification = null
+  let timeoutId = null
+
+  return {
+    async next () {
+      while (true) {
+        if (!isListening) {
+          await pgClient.query(`LISTEN ${EVENT_CHANNEL}`)
+          isListening = true
+        }
+
+        if (!iterator) {
+          // if this rejects, we just attempt another query anyway
+          nextNotification = waitForNotification(pgClient, EVENT_CHANNEL).catch(() => {})
+
+          iterator = acquireAsyncIterator(pgClient.query(asyncQuery(queryText, [next])))
+        }
+
+        const {done, value} = await iterator.next()
+
+        if (!done) {
+          ++next
+
+          return {done: false, value}
+        }
+
+        iterator = null
+
+        if (typeof timeout === 'number') {
+          const timeoutPromise = new Promise(resolve => {
+            timeoutId = clock.setTimeout(() => {
+              timeoutId = null
+              resolve()
+            }, timeout)
+          })
+
+          await Promise.race([nextNotification, timeoutPromise])
+        } else {
+          await nextNotification
+        }
+      }
+    },
+
+    async cancel () {
+      await allSerial(
+        async () => { if (iterator) await iterator.cancel() },
+        async () => { if (isListening) await pgClient.query(`UNLISTEN ${EVENT_CHANNEL}`) },
+        () => { if (timeoutId) clock.clearTimeout(timeoutId) }
+      )
+    },
+  }
 }
