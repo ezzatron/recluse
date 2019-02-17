@@ -1,13 +1,21 @@
 const Cursor = require('pg-cursor')
+const {str: crc32} = require('crc-32')
 
 const UNIQUE_VIOLATION = '23505'
+const LOCK_NAMESPACE = crc32('recluse')
 
 module.exports = {
+  acquireSessionLock,
   asyncQuery,
   inTransaction,
+  releaseSessionLock,
   waitForNotification,
 
   UNIQUE_VIOLATION,
+}
+
+async function acquireSessionLock (pgClient, name) {
+  await pgClient.query('SELECT pg_advisory_lock($1, $2)', [LOCK_NAMESPACE, crc32(name)])
 }
 
 function asyncQuery (text, values) {
@@ -44,6 +52,10 @@ async function inTransaction (pgClient, fn) {
   await pgClient.query('COMMIT')
 
   return result
+}
+
+async function releaseSessionLock (pgClient, name) {
+  await pgClient.query('SELECT pg_advisory_unlock($1, $2)', [LOCK_NAMESPACE, crc32(name)])
 }
 
 async function waitForNotification (client, channel) {
