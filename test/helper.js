@@ -2,6 +2,8 @@
 
 const {Client, Pool} = require('pg')
 
+const {inTransaction} = require('../src/pg.js')
+
 module.exports = {
   asyncIterableToArray,
   pgSpec,
@@ -74,24 +76,6 @@ function createClient (database) {
 
 function createPool (database) {
   return new Pool({...connectOptions, database})
-}
-
-async function inTransaction (pgClient, fn) {
-  let result
-
-  await pgClient.query('BEGIN')
-
-  try {
-    result = await fn()
-  } catch (error) {
-    await pgClient.query('ROLLBACK')
-
-    throw error
-  }
-
-  await pgClient.query('COMMIT')
-
-  return result
 }
 
 function resolveOnCallback () {

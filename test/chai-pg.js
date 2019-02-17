@@ -26,6 +26,17 @@ module.exports = (chai, utils) => {
     new Assertion(row).to.have.fields(fields)
   })
 
+  Assertion.addMethod('rows', function (rows) {
+    const subject = this._obj
+
+    new Assertion(subject).to.have.rowCount(rows.length)
+    new Assertion(subject).to.have.property('rows')
+
+    for (let i = 0; i < rows.length; ++i) {
+      new Assertion(subject.rows[i]).to.have.fields(rows[i])
+    }
+  })
+
   Assertion.addMethod('fields', function (fields) {
     const subject = this._obj
 

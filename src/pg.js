@@ -4,6 +4,7 @@ const UNIQUE_VIOLATION = '23505'
 
 module.exports = {
   asyncQuery,
+  inTransaction,
   waitForNotification,
 
   UNIQUE_VIOLATION,
@@ -25,6 +26,24 @@ function asyncQuery (text, values) {
     [Symbol.asyncIterator]: () => iterator,
     cancel: iterator.cancel,
   }
+}
+
+async function inTransaction (pgClient, fn) {
+  let result
+
+  await pgClient.query('BEGIN')
+
+  try {
+    result = await fn()
+  } catch (error) {
+    await pgClient.query('ROLLBACK')
+
+    throw error
+  }
+
+  await pgClient.query('COMMIT')
+
+  return result
 }
 
 async function waitForNotification (client, channel) {
