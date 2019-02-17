@@ -1,5 +1,5 @@
 const {expect} = require('chai')
-const {asyncIterableToArray, pgSpec} = require('../helper.js')
+const {asyncIterableToArray, consumeAsyncIterable, pgSpec} = require('../helper.js')
 
 const {appendEvents, readEvents} = require('../../src/event.js')
 const {initializeSchema} = require('../../src/schema.js')
@@ -81,14 +81,12 @@ describe('readEvents()', pgSpec(function () {
     })
 
     it('should support cancellation', async function () {
-      const events = readEvents(this.pgClient)
-
-      for await (const event of events) {
-        expect(event).to.exist()
-
-        await events.cancel()
-        break
-      }
+      await consumeAsyncIterable(
+        readEvents(this.pgClient),
+        1,
+        events => events.cancel(),
+        event => expect(event).to.exist()
+      )
     })
   })
 
