@@ -1,0 +1,7 @@
+const LOCK_NAMESPACE = 1000000
+
+const PROJECTION = LOCK_NAMESPACE + 1
+
+module.exports = {
+  PROJECTION,
+}
