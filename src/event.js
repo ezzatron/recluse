@@ -41,6 +41,8 @@ function readEvents (pgClient, offset = 0) {
 }
 
 function readEventsByStream (pgClient, name, offset = 0) {
+  if (!name) throw new Error('Invalid stream name')
+
   return pgClient.query(asyncQuery(
     `
     SELECT e.* FROM recluse.event AS e

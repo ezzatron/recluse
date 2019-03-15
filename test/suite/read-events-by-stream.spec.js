@@ -37,6 +37,10 @@ describe('readEventsByStream()', pgSpec(function () {
     it('should support cancellation', async function () {
       await readEventsByStream(this.pgClient, nameA).cancel()
     })
+
+    it('should require a valid stream name', function () {
+      expect(() => readEventsByStream(this.pgClient)).to.throw('Invalid stream name')
+    })
   })
 
   context('with a non-empty stream', function () {
