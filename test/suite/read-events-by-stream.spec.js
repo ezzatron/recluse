@@ -1,5 +1,5 @@
 const {expect} = require('chai')
-const {asyncIterableToArray, consumeAsyncIterable, pgSpec} = require('../helper.js')
+const {asyncIterableToArray, consumeAsyncIterable, pgSpec, TIME_PATTERN} = require('../helper.js')
 
 const {appendEvents, readEventsByStream} = require('../../src/event.js')
 const {initializeSchema} = require('../../src/schema.js')
@@ -53,18 +53,22 @@ describe('readEventsByStream()', pgSpec(function () {
 
       expect(events).to.have.length(2)
       expect(events[0]).to.have.fields({
-        stream_id: '0',
-        stream_offset: '0',
+        streamId: 0,
+        streamOffset: 0,
+        time: TIME_PATTERN,
+      })
+      expect(events[0].event).to.have.fields({
         type: eventTypeA,
         data: eventDataA,
-        time: Date,
       })
       expect(events[1]).to.have.fields({
-        stream_id: '0',
-        stream_offset: '1',
+        streamId: 0,
+        streamOffset: 1,
+        time: TIME_PATTERN,
+      })
+      expect(events[1].event).to.have.fields({
         type: eventTypeB,
         data: eventDataB,
-        time: Date,
       })
     })
 
@@ -73,11 +77,13 @@ describe('readEventsByStream()', pgSpec(function () {
 
       expect(events).to.have.length(1)
       expect(events[0]).to.have.fields({
-        stream_id: '0',
-        stream_offset: '1',
+        streamId: 0,
+        streamOffset: 1,
+        time: TIME_PATTERN,
+      })
+      expect(events[0].event).to.have.fields({
         type: eventTypeB,
         data: eventDataB,
-        time: Date,
       })
     })
 
@@ -107,8 +113,8 @@ describe('readEventsByStream()', pgSpec(function () {
       const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA))
 
       expect(events).to.have.length(2)
-      expect(events[0]).to.have.fields(eventA)
-      expect(events[1]).to.have.fields(eventB)
+      expect(events[0].event).to.have.fields(eventA)
+      expect(events[1].event).to.have.fields(eventB)
     })
   })
 }))

@@ -28,8 +28,30 @@ describe('appendEvents()', pgSpec(function () {
 
       expect(wasAppended).to.be.true()
       expect(events).to.have.length(2)
-      expect(events[0]).to.have.fields(eventA)
-      expect(events[1]).to.have.fields(eventB)
+      expect(events[0].event).to.have.fields(eventA)
+      expect(events[1].event).to.have.fields(eventB)
+    })
+
+    it('should be able to append events with null data', async function () {
+      const event = {type: eventTypeA, data: null}
+      const wasAppended = await this.inTransaction(async () => appendEvents(this.pgClient, typeA, nameA, 0, [event]))
+      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA))
+
+      expect(wasAppended).to.be.true()
+      expect(events).to.have.length(1)
+      expect(events[0].event).to.have.fields({type: eventTypeA})
+      expect(events[0].event.data).to.be.undefined()
+    })
+
+    it('should be able to append events with undefined data', async function () {
+      const event = {type: eventTypeA}
+      const wasAppended = await this.inTransaction(async () => appendEvents(this.pgClient, typeA, nameA, 0, [event]))
+      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, nameA))
+
+      expect(wasAppended).to.be.true()
+      expect(events).to.have.length(1)
+      expect(events[0].event).to.have.fields({type: eventTypeA})
+      expect(events[0].event.data).to.be.undefined()
     })
   })
 
@@ -46,8 +68,8 @@ describe('appendEvents()', pgSpec(function () {
 
       expect(wasAppended).to.be.true()
       expect(events).to.have.length(2)
-      expect(events[0]).to.have.fields(eventC)
-      expect(events[1]).to.have.fields(eventD)
+      expect(events[0].event).to.have.fields(eventC)
+      expect(events[1].event).to.have.fields(eventD)
     })
 
     it('should fail if the specified offset is less than the next stream offset', async function () {
@@ -81,10 +103,14 @@ describe('appendEvents()', pgSpec(function () {
       const [events] = await asyncIterableToArray(readEvents(this.pgClient))
 
       expect(events).to.have.length(4)
-      expect(events[0]).to.have.fields({...eventA, global_offset: '0'})
-      expect(events[1]).to.have.fields({...eventB, global_offset: '1'})
-      expect(events[2]).to.have.fields({...eventC, global_offset: '2'})
-      expect(events[3]).to.have.fields({...eventD, global_offset: '3'})
+      expect(events[0]).to.have.fields({globalOffset: 0})
+      expect(events[0].event).to.have.fields(eventA)
+      expect(events[1]).to.have.fields({globalOffset: 1})
+      expect(events[1].event).to.have.fields(eventB)
+      expect(events[2]).to.have.fields({globalOffset: 2})
+      expect(events[2].event).to.have.fields(eventC)
+      expect(events[3]).to.have.fields({globalOffset: 3})
+      expect(events[3].event).to.have.fields(eventD)
     })
   })
 
@@ -136,8 +162,8 @@ describe('appendEvents()', pgSpec(function () {
       expect(resultA).to.be.true()
       expect(resultB).to.be.false()
       expect(events).to.have.length(2)
-      expect(events[0]).to.have.fields(eventA)
-      expect(events[1]).to.have.fields(eventB)
+      expect(events[0].event).to.have.fields(eventA)
+      expect(events[1].event).to.have.fields(eventB)
     })
   })
 

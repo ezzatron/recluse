@@ -1,10 +1,12 @@
 const Cursor = require('pg-cursor')
+const {types} = require('pg')
 
 const UNIQUE_VIOLATION = '23505'
 
 module.exports = {
   acquireSessionLock,
   asyncQuery,
+  configure,
   inTransaction,
   releaseSessionLock,
   waitForNotification,
@@ -32,6 +34,16 @@ function asyncQuery (text, values) {
     [Symbol.asyncIterator]: () => iterator,
     cancel: iterator.cancel,
   }
+}
+
+const TYPE_TIMESTAMP = 1114
+const TYPE_TIMESTAMPTZ = 1184
+
+function configure () {
+  const noParse = v => v
+
+  types.setTypeParser(TYPE_TIMESTAMP, noParse)
+  types.setTypeParser(TYPE_TIMESTAMPTZ, noParse)
 }
 
 async function inTransaction (pgClient, fn) {

@@ -50,8 +50,8 @@ async function initializeSchema (pgClient) {
       type text NOT NULL,
       stream_id bigint NOT NULL,
       stream_offset bigint NOT NULL,
-      data bytea NOT NULL,
-      time timestamp NOT NULL DEFAULT now(),
+      data bytea DEFAULT NULL,
+      time timestamp with time zone NOT NULL DEFAULT now(),
 
       PRIMARY KEY (global_offset),
       UNIQUE (stream_id, stream_offset),

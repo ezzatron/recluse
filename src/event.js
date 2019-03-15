@@ -34,16 +34,23 @@ async function appendEvents (pgClient, type, name, start, events) {
 }
 
 function readEvents (pgClient, offset = 0) {
-  return pgClient.query(asyncQuery(
+  const iterator = createEventIterator(
+    pgClient,
     'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
     [offset]
-  ))
+  )
+
+  return {
+    [Symbol.asyncIterator]: () => iterator,
+    cancel: iterator.cancel,
+  }
 }
 
 function readEventsByStream (pgClient, name, offset = 0) {
   if (!name) throw new Error('Invalid stream name')
 
-  return pgClient.query(asyncQuery(
+  const iterator = createEventIterator(
+    pgClient,
     `
     SELECT e.* FROM recluse.event AS e
     INNER JOIN recluse.stream AS s ON s.id = e.stream_id
@@ -51,7 +58,12 @@ function readEventsByStream (pgClient, name, offset = 0) {
     ORDER BY e.stream_offset
     `,
     [name, offset]
-  ))
+  )
+
+  return {
+    [Symbol.asyncIterator]: () => iterator,
+    cancel: iterator.cancel,
+  }
 }
 
 function readEventsContinuously (pgClient, options = {}) {
@@ -66,7 +78,7 @@ function readEventsContinuously (pgClient, options = {}) {
 }
 
 async function insertEvent (pgClient, offset, streamId, streamOffset, event) {
-  const {type, data} = event
+  const {type, data = null} = event
 
   await pgClient.query(
     'INSERT INTO recluse.event (global_offset, type, stream_id, stream_offset, data) VALUES ($1, $2, $3, $4, $5)',
@@ -113,6 +125,26 @@ async function updateStreamOffset (pgClient, name, start, next) {
   return result.rowCount > 0 ? [true, result.rows[0].id] : [false, null]
 }
 
+function createEventIterator (pgClient, queryText, queryParams) {
+  let iterator = null
+
+  return {
+    async next () {
+      if (!iterator) iterator = acquireAsyncIterator(pgClient.query(asyncQuery(queryText, queryParams)))
+
+      const {done, value} = await iterator.next()
+
+      if (done) return {done: true}
+
+      return {done: false, value: marshalEvent(value)}
+    },
+
+    async cancel () {
+      if (iterator) await iterator.cancel()
+    },
+  }
+}
+
 function createContinuousEventIterator (pgClient, queryText, offset, timeout, clock) {
   let next = offset
   let isListening = false
@@ -140,7 +172,7 @@ function createContinuousEventIterator (pgClient, queryText, offset, timeout, cl
         if (!done) {
           ++next
 
-          return {done: false, value}
+          return {done: false, value: marshalEvent(value)}
         }
 
         iterator = null
@@ -167,5 +199,24 @@ function createContinuousEventIterator (pgClient, queryText, offset, timeout, cl
         () => { if (timeoutId) clock.clearTimeout(timeoutId) }
       )
     },
+  }
+}
+
+function marshalEvent (row) {
+  const {
+    data,
+    global_offset: globalOffset,
+    stream_id: streamId,
+    stream_offset: streamOffset,
+    time,
+    type,
+  } = row
+
+  return {
+    event: data === null ? {type} : {type, data},
+    globalOffset: parseInt(globalOffset),
+    streamId: parseInt(streamId),
+    streamOffset: parseInt(streamOffset),
+    time,
   }
 }

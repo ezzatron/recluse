@@ -46,6 +46,13 @@ module.exports = (chai, utils) => {
     for (const field in fields) {
       const actual = subject[field]
       const expected = fields[field]
+
+      if (expected instanceof RegExp) {
+        new Assertion(actual).to.match(expected)
+
+        continue
+      }
+
       const type = typeof expected
 
       if (type === 'function') {

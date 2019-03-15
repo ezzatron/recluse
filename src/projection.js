@@ -36,7 +36,7 @@ function createProjectionIterator (pgPool, name, apply, timeout, clock) {
         iterator = acquireAsyncIterator(readEventsContinuously(pgClient, {offset, timeout, clock}))
       }
 
-      const {value: event} = await iterator.next()
+      const {value: {event}} = await iterator.next()
       const value = await applyEvent(pgPool, name, apply, offset++, event)
 
       return {done: false, value}

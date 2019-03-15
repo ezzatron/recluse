@@ -4,6 +4,8 @@ const {Client, Pool} = require('pg')
 
 const {inTransaction} = require('../src/pg.js')
 
+const TIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d+\+00$/
+
 module.exports = {
   asyncIterableToArray,
   consumeAsyncIterable,
@@ -11,6 +13,8 @@ module.exports = {
   parseJsonBuffer,
   pgSpec,
   resolveOnCallback,
+
+  TIME_PATTERN,
 }
 
 function pgSpec (spec) {

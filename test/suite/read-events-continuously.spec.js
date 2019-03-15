@@ -1,5 +1,5 @@
 const {expect} = require('chai')
-const {consumeAsyncIterable, pgSpec} = require('../helper.js')
+const {consumeAsyncIterable, pgSpec, TIME_PATTERN} = require('../helper.js')
 
 const {appendEvents, readEventsContinuously} = require('../../src/event.js')
 const {initializeSchema} = require('../../src/schema.js')
@@ -33,44 +33,42 @@ describe('readEventsContinuously()', pgSpec(function () {
     })
 
     it('should return the correct events for offset 0', async function () {
+      const expectedWrappers = [
+        {globalOffset: 0, time: TIME_PATTERN},
+        {globalOffset: 1, time: TIME_PATTERN},
+      ]
       const expected = [
-        {
-          global_offset: '0',
-          type: eventTypeA,
-          data: eventDataA,
-          time: Date,
-        },
-        {
-          global_offset: '1',
-          type: eventTypeB,
-          data: eventDataB,
-          time: Date,
-        },
+        eventA,
+        eventB,
       ]
 
       await consumeAsyncIterable(
         readEventsContinuously(this.pgClient),
         expected.length,
         events => events.cancel(),
-        event => expect(event).to.have.fields(expected.shift())
+        wrapper => {
+          expect(wrapper).to.have.fields(expectedWrappers.shift())
+          expect(wrapper.event).to.have.fields(expected.shift())
+        }
       )
     })
 
     it('should return the correct events for positive offsets that exist', async function () {
+      const expectedWrappers = [
+        {globalOffset: 1, time: TIME_PATTERN},
+      ]
       const expected = [
-        {
-          global_offset: '1',
-          type: eventTypeB,
-          data: eventDataB,
-          time: Date,
-        },
+        eventB,
       ]
 
       await consumeAsyncIterable(
         readEventsContinuously(this.pgClient, {offset: 1}),
         expected.length,
         events => events.cancel(),
-        event => expect(event).to.have.fields(expected.shift())
+        wrapper => {
+          expect(wrapper).to.have.fields(expectedWrappers.shift())
+          expect(wrapper.event).to.have.fields(expected.shift())
+        }
       )
     })
   })
@@ -88,7 +86,7 @@ describe('readEventsContinuously()', pgSpec(function () {
         readEventsContinuously(this.pgClient),
         expected.length,
         events => events.cancel(),
-        event => expect(event).to.have.fields(expected.shift())
+        ({event}) => expect(event).to.have.fields(expected.shift())
       )
     })
   })
