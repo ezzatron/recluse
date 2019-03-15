@@ -96,6 +96,7 @@ function createCursorIterator (cursor) {
       if (!done) return {done, value: rows[0]}
 
       final = result
+      await cursorClose(cursor)
 
       return {done, value: final}
     },
