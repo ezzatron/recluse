@@ -7,6 +7,8 @@ const {inTransaction} = require('../src/pg.js')
 module.exports = {
   asyncIterableToArray,
   consumeAsyncIterable,
+  jsonBuffer,
+  parseJsonBuffer,
   pgSpec,
   resolveOnCallback,
 }
@@ -129,4 +131,12 @@ async function consumeAsyncIterable (iterable, count, onDone, onIteration) {
   }
 
   if (onDone) await onDone(iterable)
+}
+
+function jsonBuffer (data) {
+  return Buffer.from(JSON.stringify(data))
+}
+
+function parseJsonBuffer (data) {
+  return JSON.parse(data.toString())
 }
