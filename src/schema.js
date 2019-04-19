@@ -60,6 +60,28 @@ async function initializeSchema (pgClient) {
   `)
 
   await pgClient.query(`
+    CREATE SEQUENCE IF NOT EXISTS recluse.command_id_seq AS bigint MINVALUE 0
+  `)
+
+  await pgClient.query(`
+    CREATE TABLE IF NOT EXISTS recluse.command
+    (
+      id bigint NOT NULL DEFAULT nextval('recluse.command_id_seq'),
+      type text NOT NULL,
+      data bytea DEFAULT NULL,
+      source text NOT NULL,
+      executed_at timestamp with time zone NOT NULL DEFAULT now(),
+      handled_at timestamp with time zone DEFAULT NULL,
+
+      PRIMARY KEY (id)
+    )
+  `)
+
+  await pgClient.query(`
+    ALTER SEQUENCE recluse.command_id_seq OWNED BY recluse.command.id
+  `)
+
+  await pgClient.query(`
     CREATE SEQUENCE IF NOT EXISTS recluse.projection_id_seq AS bigint MINVALUE 0
   `)
 
