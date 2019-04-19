@@ -75,6 +75,26 @@ describe('maintainProjection()', pgSpec(function () {
       ])
     })
 
+    it('should handle errors while applying events', async function () {
+      const releases = []
+      const pool = {
+        connect: async () => {
+          const client = await this.createPgClient()
+          this.sandbox.spy(client, 'release')
+          releases.push(client.release)
+
+          return client
+        },
+      }
+      const error = new Error('You done goofed')
+      const apply = async () => { throw error }
+      const projection = maintainProjection(pool, nameA, apply)
+
+      await expect(consumeAsyncIterable(projection, 1)).to.be.rejectedWith(error)
+
+      await projection.cancel()
+    })
+
     it('should be able to apply new events when relying solely on notifications', async function () {
       await Promise.all([
         consumeAsyncIterable(

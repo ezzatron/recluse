@@ -61,7 +61,7 @@ async function applyEvent (pgPool, name, apply, offset, event) {
       return apply(pgClient, event)
     })
   } finally {
-    await pgClient.release()
+    pgClient.release()
   }
 }
 
