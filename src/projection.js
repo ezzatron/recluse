@@ -55,15 +55,15 @@ function createProjectionIterator (pgPool, name, apply, timeout, clock) {
 async function applyEvent (pgPool, name, apply, offset, event) {
   const pgClient = await pgPool.connect()
 
-  const result = await inTransaction(pgClient, async () => {
-    await incrementProjection(pgClient, name, offset)
+  try {
+    return inTransaction(pgClient, async () => {
+      await incrementProjection(pgClient, name, offset)
 
-    return apply(pgClient, event)
-  })
-
-  await pgClient.release()
-
-  return result
+      return apply(pgClient, event)
+    })
+  } finally {
+    await pgClient.release()
+  }
 }
 
 async function readProjectionId (pgClient, name) {
