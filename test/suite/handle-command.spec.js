@@ -274,7 +274,8 @@ describe('handleCommand()', pgSpec(function () {
       await handleCommand(this.pgClient, {type: commandTypeA})
     })
 
-    await expect(operation).to.be.rejectedWith(`Unable to handle ${commandTypeA} command - no suitable aggregates found`)
+    await expect(operation)
+      .to.be.rejectedWith(`Unable to handle ${commandTypeA} command - no suitable aggregates found`)
   })
 
   it('should throw an error when handling commands that cannot be routed', async function () {
