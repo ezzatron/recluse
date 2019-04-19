@@ -60,6 +60,7 @@ function readEventsContinuously (pgClient, options = {}) {
     pgClient,
     'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
     EVENT_CHANNEL,
+    ({globalOffset}) => globalOffset + 1,
     {clock, marshal, offset, timeout}
   )
 }

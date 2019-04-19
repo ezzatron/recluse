@@ -51,9 +51,10 @@ function configure () {
   types.setTypeParser(TYPE_TIMESTAMPTZ, noParse)
 }
 
-function continuousQuery (pgClient, text, channel, options = {}) {
+function continuousQuery (pgClient, text, channel, nextOffset, options = {}) {
   const {extraValues = [], marshal = identity, offset = 0, timeout = 100, clock = systemClock} = options
-  const iterator = createContinuousQueryIterator(pgClient, text, offset, extraValues, marshal, channel, timeout, clock)
+  const iterator =
+    createContinuousQueryIterator(pgClient, text, offset, nextOffset, extraValues, marshal, channel, timeout, clock)
 
   return {
     [Symbol.asyncIterator]: () => iterator,
@@ -134,7 +135,17 @@ function createCursorIterator (cursor, marshal = identity) {
   }
 }
 
-function createContinuousQueryIterator (pgClient, text, offset, extraValues, marshal, channel, timeout, clock) {
+function createContinuousQueryIterator (
+  pgClient,
+  text,
+  offset,
+  nextOffset,
+  extraValues,
+  marshal,
+  channel,
+  timeout,
+  clock
+) {
   let next = offset
   let isListening = false
   let iterator = null
@@ -159,7 +170,7 @@ function createContinuousQueryIterator (pgClient, text, offset, extraValues, mar
         const result = await iterator.next()
 
         if (!result.done) {
-          ++next
+          next = nextOffset(result.value)
 
           return result
         }
