@@ -2,6 +2,7 @@ const {expect} = require('chai')
 const {asyncIterableToArray, pgSpec} = require('../helper.js')
 
 const {appendEvents, readEvents, readEventsByStream} = require('../../src/event.js')
+const {EVENT: CHANNEL} = require('../../src/channel.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {waitForNotification} = require('../../src/pg.js')
 
@@ -170,8 +171,8 @@ describe('appendEvents()', pgSpec(function () {
   context('with other clients listening for events', function () {
     beforeEach(async function () {
       this.secondaryPgClient = await this.createPgClient()
-      await this.secondaryPgClient.query('LISTEN recluse_event')
-      this.waitForEvent = waitForNotification(this.secondaryPgClient, 'recluse_event')
+      await this.secondaryPgClient.query(`LISTEN ${CHANNEL}`)
+      this.waitForEvent = waitForNotification(this.secondaryPgClient, CHANNEL)
     })
 
     it('should notify listening clients when appending events', async function () {
@@ -180,7 +181,7 @@ describe('appendEvents()', pgSpec(function () {
         this.inTransaction(async () => appendEvents(this.pgClient, typeA, nameA, 0, [eventA])),
       ])
 
-      expect(notification.channel).to.equal('recluse_event')
+      expect(notification.channel).to.equal(CHANNEL)
     })
   })
 }))

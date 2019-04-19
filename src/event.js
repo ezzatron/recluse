@@ -1,4 +1,5 @@
 const {asyncQuery, continuousQuery, UNIQUE_VIOLATION} = require('./pg.js')
+const {EVENT: CHANNEL} = require('./channel.js')
 
 module.exports = {
   appendEvents,
@@ -6,8 +7,6 @@ module.exports = {
   readEventsByStream,
   readEventsContinuously,
 }
-
-const EVENT_CHANNEL = 'recluse_event'
 
 async function appendEvents (pgClient, type, name, start, events) {
   const count = events.length
@@ -25,7 +24,7 @@ async function appendEvents (pgClient, type, name, start, events) {
     await insertEvent(pgClient, offset + i, streamId, start + i, events[i])
   }
 
-  await pgClient.query(`NOTIFY ${EVENT_CHANNEL}`)
+  await pgClient.query(`NOTIFY ${CHANNEL}`)
 
   return true
 }
@@ -59,7 +58,7 @@ function readEventsContinuously (pgClient, options = {}) {
   return continuousQuery(
     pgClient,
     'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
-    EVENT_CHANNEL,
+    CHANNEL,
     ({globalOffset}) => globalOffset + 1,
     {clock, marshal, offset, timeout}
   )
