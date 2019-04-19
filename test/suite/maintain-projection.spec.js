@@ -162,7 +162,7 @@ describe('maintainProjection()', pgSpec(function () {
     })
   })
 
-  context('when resuming the mainenance of an existing projection', function () {
+  context('when resuming the maintenance of an existing projection', function () {
     beforeEach(async function () {
       await appendEvents(this.pgClient, streamTypeA, streamNameA, 0, [eventA, eventB])
       await consumeAsyncIterable(
