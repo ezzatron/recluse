@@ -1,4 +1,5 @@
 const {expect} = require('chai')
+
 const {asyncIterableToArray, jsonBuffer, parseJsonBuffer, pgSpec} = require('../helper.js')
 
 const {createCommandHandler} = require('../../src/command.js')

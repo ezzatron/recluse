@@ -1,4 +1,5 @@
 const {expect} = require('chai')
+
 const {consumeAsyncIterable, pgSpec, TIME_PATTERN} = require('../helper.js')
 
 const {appendEvents, readEventsContinuously} = require('../../src/event.js')

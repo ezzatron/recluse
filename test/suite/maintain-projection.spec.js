@@ -1,7 +1,8 @@
-const {createClock} = require('../clock.js')
-const {expect} = require('chai')
 const {createSandbox, match} = require('sinon')
+const {expect} = require('chai')
+
 const {consumeAsyncIterable, pgSpec} = require('../helper.js')
+const {createClock} = require('../clock.js')
 
 const {appendEvents} = require('../../src/event.js')
 const {initializeSchema} = require('../../src/schema.js')
