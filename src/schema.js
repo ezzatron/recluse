@@ -74,4 +74,8 @@ async function initializeSchema (pgClient) {
       UNIQUE (name)
     )
   `)
+
+  await pgClient.query(`
+    ALTER SEQUENCE recluse.projection_id_seq OWNED BY recluse.projection.id
+  `)
 }
