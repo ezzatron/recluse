@@ -19,6 +19,8 @@ module.exports = {
 
 function pgSpec (spec) {
   return function () {
+    this.slow(200)
+
     before(async function () {
       this.pgInitClient = createClient('postgres')
 
