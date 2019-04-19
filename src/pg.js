@@ -19,7 +19,7 @@ module.exports = {
   UNIQUE_VIOLATION,
 }
 
-async function acquireSessionLock (pgClient, namespace, id) {
+async function acquireSessionLock (pgClient, namespace, id = 0) {
   await pgClient.query('SELECT pg_advisory_lock($1, $2)', [namespace, id])
 }
 
@@ -80,7 +80,7 @@ async function inTransaction (pgClient, fn) {
   return result
 }
 
-async function releaseSessionLock (pgClient, namespace, id) {
+async function releaseSessionLock (pgClient, namespace, id = 0) {
   await pgClient.query('SELECT pg_advisory_unlock($1, $2)', [namespace, id])
 }
 
