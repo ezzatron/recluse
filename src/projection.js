@@ -3,14 +3,13 @@ const {acquireSessionLock, inTransaction, releaseSessionLock} = require('./pg.js
 const {allSerial} = require('./async.js')
 const {PROJECTION: LOCK_NAMESPACE} = require('./lock.js')
 const {readEventsContinuously} = require('./event.js')
-const {systemClock} = require('./clock.js')
 
 module.exports = {
   maintainProjection,
 }
 
 function maintainProjection (pgPool, name, apply, options = {}) {
-  const {timeout = 100, clock = systemClock} = options
+  const {timeout, clock} = options
   const iterator = createProjectionIterator(pgPool, name, apply, timeout, clock)
 
   return {
