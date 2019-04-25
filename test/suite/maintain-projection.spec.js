@@ -41,6 +41,8 @@ describe('maintainProjection()', pgSpec(function () {
       const value = event.data.toString()
 
       await pgClient.query('INSERT INTO recluse.test_projection (id, value) VALUES ($1, $2)', [id, value])
+
+      return id
     }
 
     this.projectionQuery = 'SELECT * FROM recluse.test_projection'
@@ -67,7 +69,8 @@ describe('maintainProjection()', pgSpec(function () {
       await consumeAsyncIterable(
         maintainProjection(this.pgPool, nameA, this.apply),
         2,
-        projection => projection.cancel()
+        projection => projection.cancel(),
+        (value, i) => expect(value).to.equal(i)
       )
 
       expect(await this.query(this.projectionQuery)).to.have.rows([

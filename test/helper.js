@@ -133,7 +133,7 @@ async function consumeAsyncIterable (iterable, count, onDone, onIteration) {
 
     if (done) throw new Error('Unexpected end of async iterable')
 
-    if (onIteration) await onIteration(value)
+    if (onIteration) await onIteration(value, i)
   }
 
   if (onDone) await onDone(iterable)
