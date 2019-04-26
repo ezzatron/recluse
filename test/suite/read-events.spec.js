@@ -7,8 +7,8 @@ const {initializeSchema} = require('../../src/schema.js')
 
 describe('readEvents()', pgSpec(function () {
   const typeA = 'stream-type-a'
-  const nameA = 'stream-name-a'
-  const nameB = 'stream-name-b'
+  const instanceA = 'stream-instance-a'
+  const instanceB = 'stream-instance-b'
   const eventTypeA = 'event-type-a'
   const eventTypeB = 'event-type-b'
   const eventDataA = Buffer.from('a')
@@ -42,7 +42,7 @@ describe('readEvents()', pgSpec(function () {
 
   context('with a non-empty stream', function () {
     beforeEach(async function () {
-      await appendEvents(this.pgClient, typeA, nameA, 0, [eventA, eventB])
+      await appendEvents(this.pgClient, typeA, instanceA, 0, [eventA, eventB])
     })
 
     it('should return the correct events for offset 0', async function () {
@@ -99,8 +99,8 @@ describe('readEvents()', pgSpec(function () {
 
   context('with multiple non-empty streams', function () {
     beforeEach(async function () {
-      await appendEvents(this.pgClient, typeA, nameA, 0, [eventA, eventB])
-      await appendEvents(this.pgClient, typeA, nameB, 0, [eventC, eventD])
+      await appendEvents(this.pgClient, typeA, instanceA, 0, [eventA, eventB])
+      await appendEvents(this.pgClient, typeA, instanceB, 0, [eventC, eventD])
     })
 
     it('should return events for all streams', async function () {

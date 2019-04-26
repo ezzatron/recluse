@@ -12,7 +12,7 @@ const {UNIQUE_VIOLATION} = require('../../src/pg.js')
 describe('maintainCommandHandler()', pgSpec(function () {
   const nameA = 'aggregate-name-a'
   const typeA = 'aggregate-type-a'
-  const idA = 'aggregate-id-a'
+  const instanceA = 'aggregate-instance-a'
   const sourceA = 'command-source-a'
   const commandTypeA = 'command-type-a'
   const commandTypeB = 'command-type-b'
@@ -33,7 +33,7 @@ describe('maintainCommandHandler()', pgSpec(function () {
         type: typeA,
         commandTypes: [commandTypeA, commandTypeB],
         eventTypes: [eventTypeA, eventTypeB],
-        routeCommand: () => idA,
+        routeCommand: () => instanceA,
         createInitialState: () => {},
         handleCommand: ({command: {type, data}, recordEvents}) => {
           switch (type) {

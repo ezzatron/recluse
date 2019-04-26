@@ -8,13 +8,13 @@ module.exports = {
   readEventsContinuously,
 }
 
-async function appendEvents (pgClient, type, name, start, events) {
+async function appendEvents (pgClient, type, instance, start, events) {
   const count = events.length
   const next = start + count
 
   const [isUpdated, streamId] = start === 0
-    ? await insertStream(pgClient, type, name, next)
-    : await updateStreamOffset(pgClient, name, start, next)
+    ? await insertStream(pgClient, type, instance, next)
+    : await updateStreamOffset(pgClient, instance, start, next)
 
   if (!isUpdated) return false
 
@@ -37,17 +37,17 @@ function readEvents (pgClient, offset = 0) {
   ))
 }
 
-function readEventsByStream (pgClient, name, offset = 0) {
-  if (!name) throw new Error('Invalid stream name')
+function readEventsByStream (pgClient, instance, offset = 0) {
+  if (!instance) throw new Error('Invalid stream instance')
 
   return pgClient.query(asyncQuery(
     `
     SELECT e.* FROM recluse.event AS e
     INNER JOIN recluse.stream AS s ON s.id = e.stream_id
-    WHERE s.name = $1 AND e.stream_offset >= $2
+    WHERE s.instance = $1 AND e.stream_offset >= $2
     ORDER BY e.stream_offset
     `,
-    [name, offset],
+    [instance, offset],
     marshal
   ))
 }
@@ -73,13 +73,13 @@ async function insertEvent (pgClient, offset, streamId, streamOffset, event) {
   )
 }
 
-async function insertStream (pgClient, type, name, next) {
+async function insertStream (pgClient, type, instance, next) {
   let result
 
   try {
     result = await pgClient.query(
-      'INSERT INTO recluse.stream (type, name, next) VALUES ($1, $2, $3) RETURNING id',
-      [type, name, next]
+      'INSERT INTO recluse.stream (type, instance, next) VALUES ($1, $2, $3) RETURNING id',
+      [type, instance, next]
     )
   } catch (error) {
     if (error.code === UNIQUE_VIOLATION) return [false, null]
@@ -103,10 +103,10 @@ async function updateGlobalOffset (pgClient, count) {
   return result.rows[0].next - count
 }
 
-async function updateStreamOffset (pgClient, name, start, next) {
+async function updateStreamOffset (pgClient, instance, start, next) {
   const result = await pgClient.query(
-    'UPDATE recluse.stream SET next = $1 WHERE name = $2 AND next = $3 RETURNING id',
-    [next, name, start]
+    'UPDATE recluse.stream SET next = $1 WHERE instance = $2 AND next = $3 RETURNING id',
+    [next, instance, start]
   )
 
   return result.rowCount > 0 ? [true, result.rows[0].id] : [false, null]

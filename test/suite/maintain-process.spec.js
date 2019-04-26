@@ -13,7 +13,7 @@ describe('maintainProcess()', pgSpec(function () {
   const nameA = 'process-name-a'
   const instanceA = 'process-instance-a'
   const streamTypeA = 'stream-type-a'
-  const streamNameA = 'stream-name-a'
+  const streamInstanceA = 'stream-instance-a'
   const eventTypeA = 'event-type-a'
   const eventTypeB = 'event-type-b'
   const commandTypeA = 'command-type-a'
@@ -47,7 +47,7 @@ describe('maintainProcess()', pgSpec(function () {
         ...emptyProcess,
       }
       this.sandbox.spy(process, 'routeEvent')
-      await appendEvents(this.pgClient, streamTypeA, streamNameA, 0, [eventA])
+      await appendEvents(this.pgClient, streamTypeA, streamInstanceA, 0, [eventA])
       await maintainProcess(this.pgClient, nameA, emptyProcess).cancel()
 
       expect(process.routeEvent).to.not.have.been.called()
@@ -56,7 +56,7 @@ describe('maintainProcess()', pgSpec(function () {
 
   context('while iterating', function () {
     beforeEach(async function () {
-      await appendEvents(this.pgClient, streamTypeA, streamNameA, 0, [eventA, eventB])
+      await appendEvents(this.pgClient, streamTypeA, streamInstanceA, 0, [eventA, eventB])
     })
 
     it('should process the events in the correct order', async function () {
@@ -87,7 +87,7 @@ describe('maintainProcess()', pgSpec(function () {
     })
 
     it('should update the state only when replaceState() is called', async function () {
-      await appendEvents(this.pgClient, streamTypeA, streamNameA, 2, [eventC])
+      await appendEvents(this.pgClient, streamTypeA, streamInstanceA, 2, [eventC])
 
       const process = {
         ...emptyProcess,
@@ -245,7 +245,7 @@ describe('maintainProcess()', pgSpec(function () {
           process => process.cancel()
         ),
 
-        appendEvents(this.pgClient, streamTypeA, streamNameA, 2, [eventC, eventD]),
+        appendEvents(this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
       ])
       const [commands] = await asyncIterableToArray(readCommands(this.pgClient))
 
@@ -273,7 +273,7 @@ describe('maintainProcess()', pgSpec(function () {
           process => process.cancel()
         ),
 
-        appendEvents(this.pgClient, streamTypeA, streamNameA, 2, [eventC, eventD]),
+        appendEvents(this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
       ])
       const [commands] = await asyncIterableToArray(readCommands(this.pgClient))
 
@@ -307,7 +307,7 @@ describe('maintainProcess()', pgSpec(function () {
           process => process.cancel()
         ),
 
-        appendEvents(appendClient, streamTypeA, streamNameA, 2, [eventC, eventD]),
+        appendEvents(appendClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
       ])
       const [commands] = await asyncIterableToArray(readCommands(this.pgClient))
 
@@ -330,7 +330,7 @@ describe('maintainProcess()', pgSpec(function () {
         },
       }
 
-      await appendEvents(this.pgClient, streamTypeA, streamNameA, 0, [eventA, eventB])
+      await appendEvents(this.pgClient, streamTypeA, streamInstanceA, 0, [eventA, eventB])
       await consumeAsyncIterable(
         maintainProcess(this.pgPool, nameA, this.process),
         2,
@@ -346,7 +346,7 @@ describe('maintainProcess()', pgSpec(function () {
           process => process.cancel()
         ),
 
-        appendEvents(this.pgClient, streamTypeA, streamNameA, 2, [eventC, eventD]),
+        appendEvents(this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
       ])
       const [commands] = await asyncIterableToArray(readCommands(this.pgClient))
 
@@ -378,7 +378,7 @@ describe('maintainProcess()', pgSpec(function () {
         maintain(),
         maintain(),
 
-        appendEvents(this.pgClient, streamTypeA, streamNameA, 0, [eventA, eventB, eventC, eventD]),
+        appendEvents(this.pgClient, streamTypeA, streamInstanceA, 0, [eventA, eventB, eventC, eventD]),
       ])
       const [commands] = await asyncIterableToArray(readCommands(this.pgClient))
 

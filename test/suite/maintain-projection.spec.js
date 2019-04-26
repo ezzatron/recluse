@@ -11,7 +11,7 @@ const {maintainProjection} = require('../../src/projection.js')
 describe('maintainProjection()', pgSpec(function () {
   const nameA = 'projection-name-a'
   const streamTypeA = 'stream-type-a'
-  const streamNameA = 'stream-name-a'
+  const streamInstanceA = 'stream-instance-a'
   const eventTypeA = 'event-type-a'
   const eventTypeB = 'event-type-b'
   const eventA = {type: eventTypeA, data: Buffer.from('a')}
@@ -62,7 +62,7 @@ describe('maintainProjection()', pgSpec(function () {
 
   context('while iterating', function () {
     beforeEach(async function () {
-      await appendEvents(this.pgClient, streamTypeA, streamNameA, 0, [eventA, eventB])
+      await appendEvents(this.pgClient, streamTypeA, streamInstanceA, 0, [eventA, eventB])
     })
 
     it('should apply the events in the correct order', async function () {
@@ -107,7 +107,7 @@ describe('maintainProjection()', pgSpec(function () {
           projection => projection.cancel()
         ),
 
-        appendEvents(this.pgClient, streamTypeA, streamNameA, 2, [eventC, eventD]),
+        appendEvents(this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
       ])
 
       expect(await this.query(this.projectionQuery)).to.have.rows([
@@ -128,7 +128,7 @@ describe('maintainProjection()', pgSpec(function () {
           projection => projection.cancel()
         ),
 
-        appendEvents(this.pgClient, streamTypeA, streamNameA, 2, [eventC, eventD]),
+        appendEvents(this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
       ])
 
       expect(await this.query(this.projectionQuery)).to.have.rows([
@@ -154,7 +154,7 @@ describe('maintainProjection()', pgSpec(function () {
           projection => projection.cancel()
         ),
 
-        appendEvents(appendClient, streamTypeA, streamNameA, 2, [eventC, eventD]),
+        appendEvents(appendClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
       ])
 
       expect(await this.query(this.projectionQuery)).to.have.rows([
@@ -168,7 +168,7 @@ describe('maintainProjection()', pgSpec(function () {
 
   context('when resuming the maintenance of an existing projection', function () {
     beforeEach(async function () {
-      await appendEvents(this.pgClient, streamTypeA, streamNameA, 0, [eventA, eventB])
+      await appendEvents(this.pgClient, streamTypeA, streamInstanceA, 0, [eventA, eventB])
       await consumeAsyncIterable(
         maintainProjection(this.pgPool, nameA, this.apply),
         2,
@@ -184,7 +184,7 @@ describe('maintainProjection()', pgSpec(function () {
           projection => projection.cancel()
         ),
 
-        appendEvents(this.pgClient, streamTypeA, streamNameA, 2, [eventC, eventD]),
+        appendEvents(this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
       ])
 
       expect(await this.query(this.projectionQuery)).to.have.rows([
@@ -208,7 +208,7 @@ describe('maintainProjection()', pgSpec(function () {
         maintain(),
         maintain(),
 
-        appendEvents(this.pgClient, streamTypeA, streamNameA, 0, [eventA, eventB, eventC, eventD]),
+        appendEvents(this.pgClient, streamTypeA, streamInstanceA, 0, [eventA, eventB, eventC, eventD]),
       ])
 
       expect(await this.query(this.projectionQuery)).to.have.rows([

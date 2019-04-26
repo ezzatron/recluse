@@ -27,11 +27,11 @@ async function initializeSchema (pgClient) {
     (
       id bigint NOT NULL DEFAULT nextval('recluse.stream_id_seq'),
       type text NOT NULL,
-      name text NOT NULL,
+      instance text NOT NULL,
       next bigint NOT NULL,
 
       PRIMARY KEY (id),
-      UNIQUE (name)
+      UNIQUE (instance)
     )
   `)
 

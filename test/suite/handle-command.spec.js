@@ -32,13 +32,13 @@ describe('handleCommand()', pgSpec(function () {
   it('should be able to handle commands', async function () {
     const createCommandA = increment => ({type: commandTypeA, data: {increment}})
     const createCommandB = increment => ({type: commandTypeB, data: {increment}})
-    const id = 'aggregate-id-a'
+    const instance = 'aggregate-instance-a'
     const handleCommand = createCommandHandler({
       [nameA]: {
         ...emptyAggregate,
         commandTypes: [commandTypeA, commandTypeB],
         eventTypes: [eventTypeA, eventTypeB],
-        routeCommand: () => id,
+        routeCommand: () => instance,
         createInitialState: () => ({a: 0, b: 0}),
 
         handleCommand: ({state: {a, b}, command: {type, data: {increment}}, recordEvents}) => {
@@ -66,7 +66,7 @@ describe('handleCommand()', pgSpec(function () {
       isHandled.push(await handleCommand(this.pgClient, createCommandB(333)))
     })
 
-    const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, id))
+    const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, instance))
 
     expect(isHandled).to.deep.equal([true, true, true])
     expect(events).to.have.length(3)
@@ -77,13 +77,13 @@ describe('handleCommand()', pgSpec(function () {
 
   it('should create aggregate streams with the appropriate type', async function () {
     const createCommandA = () => ({type: commandTypeA})
-    const id = 'aggregate-id-a'
+    const instance = 'aggregate-instance-a'
     const handleCommand = createCommandHandler({
       [nameA]: {
         ...emptyAggregate,
         commandTypes: [commandTypeA],
         eventTypes: [eventTypeA],
-        routeCommand: () => id,
+        routeCommand: () => instance,
         handleCommand: ({recordEvents}) => recordEvents({type: eventTypeA, data: jsonBuffer(null)}),
       },
     })
@@ -92,19 +92,19 @@ describe('handleCommand()', pgSpec(function () {
 
     expect(isHandled).to.be.true()
     expect(await this.query('SELECT * FROM recluse.stream')).to.have.rows([
-      {name: id, type: typeA},
+      {instance, type: typeA},
     ])
   })
 
   it('should immediately apply recorded events to the state', async function () {
     const createCommandA = () => ({type: commandTypeA})
-    const id = 'aggregate-id-a'
+    const instance = 'aggregate-instance-a'
     const handleCommand = createCommandHandler({
       [nameA]: {
         ...emptyAggregate,
         commandTypes: [commandTypeA],
         eventTypes: [eventTypeA],
-        routeCommand: () => id,
+        routeCommand: () => instance,
         createInitialState: () => ({a: 0}),
 
         handleCommand: ({state, recordEvents}) => {
@@ -123,7 +123,7 @@ describe('handleCommand()', pgSpec(function () {
     })
 
     const isHandled = await this.inTransaction(async () => handleCommand(this.pgClient, createCommandA()))
-    const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, id))
+    const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, instance))
 
     expect(isHandled).to.be.true()
     expect(events).to.have.length(3)
@@ -134,14 +134,14 @@ describe('handleCommand()', pgSpec(function () {
 
   it('should not allow failures to affect the state for future calls', async function () {
     const createCommandA = isOkay => ({type: commandTypeA, data: {isOkay}})
-    const id = 'aggregate-id-a'
+    const instance = 'aggregate-instance-a'
     const notOkay = new Error('Not okay.')
     const handleCommand = createCommandHandler({
       [nameA]: {
         ...emptyAggregate,
         commandTypes: [commandTypeA],
         eventTypes: [eventTypeA],
-        routeCommand: () => id,
+        routeCommand: () => instance,
         createInitialState: () => ({a: 0}),
 
         handleCommand: ({state, command: {data: {isOkay}}, recordEvents}) => {
@@ -166,7 +166,7 @@ describe('handleCommand()', pgSpec(function () {
       error = e
     }
     isHandled.push(await this.inTransaction(async () => handleCommand(this.pgClient, createCommandA(true))))
-    const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, id))
+    const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, instance))
 
     expect(isHandled).to.deep.equal([true, true])
     expect(error).to.equal(notOkay)
@@ -176,15 +176,15 @@ describe('handleCommand()', pgSpec(function () {
   })
 
   it('should be able to route to aggregate instances on a per-command basis', async function () {
-    const createCommandA = (id, increment) => ({type: commandTypeA, data: {id, increment}})
-    const idA = 'aggregate-id-a'
-    const idB = 'aggregate-id-b'
+    const createCommandA = (instance, increment) => ({type: commandTypeA, data: {instance, increment}})
+    const instanceA = 'aggregate-instance-a'
+    const instanceB = 'aggregate-instance-b'
     const handleCommand = createCommandHandler({
       [nameA]: {
         ...emptyAggregate,
         commandTypes: [commandTypeA],
         eventTypes: [eventTypeA],
-        routeCommand: ({data: {id}}) => id,
+        routeCommand: ({data: {instance}}) => instance,
         createInitialState: () => ({a: 0}),
 
         handleCommand: ({state: {a}, command: {data: {increment}}, recordEvents}) => {
@@ -200,14 +200,14 @@ describe('handleCommand()', pgSpec(function () {
 
     const isHandled = []
     await this.inTransaction(async () => {
-      isHandled.push(await handleCommand(this.pgClient, createCommandA(idA, 111)))
-      isHandled.push(await handleCommand(this.pgClient, createCommandA(idB, 222)))
-      isHandled.push(await handleCommand(this.pgClient, createCommandA(idA, 333)))
-      isHandled.push(await handleCommand(this.pgClient, createCommandA(idB, 444)))
+      isHandled.push(await handleCommand(this.pgClient, createCommandA(instanceA, 111)))
+      isHandled.push(await handleCommand(this.pgClient, createCommandA(instanceB, 222)))
+      isHandled.push(await handleCommand(this.pgClient, createCommandA(instanceA, 333)))
+      isHandled.push(await handleCommand(this.pgClient, createCommandA(instanceB, 444)))
     })
 
-    const [eventsA] = await asyncIterableToArray(readEventsByStream(this.pgClient, idA))
-    const [eventsB] = await asyncIterableToArray(readEventsByStream(this.pgClient, idB))
+    const [eventsA] = await asyncIterableToArray(readEventsByStream(this.pgClient, instanceA))
+    const [eventsB] = await asyncIterableToArray(readEventsByStream(this.pgClient, instanceB))
 
     expect(isHandled).to.deep.equal([true, true, true, true])
     expect(eventsA).to.have.length(2)
@@ -221,14 +221,14 @@ describe('handleCommand()', pgSpec(function () {
   it('should support multiple aggregates', async function () {
     const createCommandA = () => ({type: commandTypeA})
     const createCommandB = () => ({type: commandTypeB})
-    const idA = 'aggregate-id-a'
-    const idB = 'aggregate-id-b'
+    const instanceA = 'aggregate-instance-a'
+    const instanceB = 'aggregate-instance-b'
     const handleCommand = createCommandHandler({
       [nameA]: {
         ...emptyAggregate,
         commandTypes: [commandTypeA],
         eventTypes: [eventTypeA],
-        routeCommand: () => idA,
+        routeCommand: () => instanceA,
         createInitialState: () => ({count: 0}),
         handleCommand: ({state: {count}, recordEvents}) => recordEvents({type: eventTypeA, data: jsonBuffer(count)}),
         applyEvent: state => ++state.count,
@@ -238,7 +238,7 @@ describe('handleCommand()', pgSpec(function () {
         ...emptyAggregate,
         commandTypes: [commandTypeB],
         eventTypes: [eventTypeA],
-        routeCommand: () => idB,
+        routeCommand: () => instanceB,
         createInitialState: () => ({count: 0}),
         handleCommand: ({state: {count}, recordEvents}) => recordEvents({type: eventTypeA, data: jsonBuffer(count)}),
         applyEvent: state => ++state.count,
@@ -253,8 +253,8 @@ describe('handleCommand()', pgSpec(function () {
       isHandled.push(await handleCommand(this.pgClient, createCommandB()))
     })
 
-    const [eventsA] = await asyncIterableToArray(readEventsByStream(this.pgClient, idA))
-    const [eventsB] = await asyncIterableToArray(readEventsByStream(this.pgClient, idB))
+    const [eventsA] = await asyncIterableToArray(readEventsByStream(this.pgClient, instanceA))
+    const [eventsB] = await asyncIterableToArray(readEventsByStream(this.pgClient, instanceB))
 
     expect(isHandled).to.deep.equal([true, true, true, true])
     expect(eventsA).to.have.length(2)
@@ -298,7 +298,7 @@ describe('handleCommand()', pgSpec(function () {
       [nameA]: {
         ...emptyAggregate,
         commandTypes: [commandTypeA],
-        routeCommand: () => 'aggregate-id-a',
+        routeCommand: () => 'aggregate-instance-a',
         handleCommand: ({recordEvents}) => recordEvents({type: eventTypeA}),
       },
     })
