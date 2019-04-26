@@ -104,11 +104,11 @@ async function initializeSchema (pgClient) {
   await pgClient.query(`
     CREATE TABLE IF NOT EXISTS recluse.process
     (
-      name text NOT NULL,
+      type text NOT NULL,
       instance text NOT NULL,
       state bytea DEFAULT NULL,
 
-      PRIMARY KEY (name, instance)
+      PRIMARY KEY (type, instance)
     )
   `)
 }

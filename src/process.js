@@ -6,8 +6,7 @@ module.exports = {
 }
 
 function maintainProcess (pgPool, name, process, options = {}) {
-  const processName = `process.${name}`
-  const projectionName = `recluse.${processName}`
+  const processType = `process.${name}`
   const {commandTypes, createInitialState, eventTypes, handleEvent, routeEvent} = process
   const {timeout, clock} = options
 
@@ -18,7 +17,7 @@ function maintainProcess (pgPool, name, process, options = {}) {
 
     if (!instance) return false
 
-    const state = await readState(pgClient, instance, createInitialState)
+    const state = await readState(pgClient, processType, instance, createInitialState)
 
     let shouldReplaceState = false
     let nextState
@@ -26,9 +25,11 @@ function maintainProcess (pgPool, name, process, options = {}) {
 
     function executeCommands (...commands) {
       commands.forEach(command => {
-        const {type} = command
+        const {type: commandType} = command
 
-        if (!commandTypes.includes(type)) throw new Error(`Process ${name} cannot execute ${type} commands`)
+        if (!commandTypes.includes(commandType)) {
+          throw new Error(`Process ${name} cannot execute ${commandType} commands`)
+        }
 
         executedCommands.push(command)
       })
@@ -40,19 +41,19 @@ function maintainProcess (pgPool, name, process, options = {}) {
     }
 
     await handleEvent({event, executeCommands, replaceState, state})
-    await executeCommandsRaw(pgClient, processName, executedCommands)
-    if (shouldReplaceState) await writeState(pgClient, name, instance, nextState)
+    await executeCommandsRaw(pgClient, processType, executedCommands)
+    if (shouldReplaceState) await writeState(pgClient, processType, instance, nextState)
 
     return true
   }
 
-  return maintainProjection(pgPool, projectionName, apply, {timeout, clock})
+  return maintainProjection(pgPool, processType, apply, {timeout, clock})
 }
 
-async function readState (pgClient, instance, createInitialState) {
+async function readState (pgClient, processType, instance, createInitialState) {
   const result = await pgClient.query(
-    'SELECT state FROM recluse.process WHERE instance = $1',
-    [instance]
+    'SELECT state FROM recluse.process WHERE type = $1 AND instance = $2',
+    [processType, instance]
   )
 
   if (result.rowCount > 0) return result.rows[0].state
@@ -60,12 +61,12 @@ async function readState (pgClient, instance, createInitialState) {
   return createInitialState()
 }
 
-async function writeState (pgClient, name, instance, state) {
+async function writeState (pgClient, processType, instance, state) {
   await pgClient.query(
     `
-    INSERT INTO recluse.process (name, instance, state) VALUES ($1, $2, $3)
-    ON CONFLICT (name, instance) DO UPDATE SET state = $3
+    INSERT INTO recluse.process (type, instance, state) VALUES ($1, $2, $3)
+    ON CONFLICT (type, instance) DO UPDATE SET state = $3
     `,
-    [name, instance, state]
+    [processType, instance, state]
   )
 }
