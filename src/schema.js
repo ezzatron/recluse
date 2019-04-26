@@ -100,4 +100,15 @@ async function initializeSchema (pgClient) {
   await pgClient.query(`
     ALTER SEQUENCE recluse.projection_id_seq OWNED BY recluse.projection.id
   `)
+
+  await pgClient.query(`
+    CREATE TABLE IF NOT EXISTS recluse.process
+    (
+      name text NOT NULL,
+      id text NOT NULL,
+      data bytea DEFAULT NULL,
+
+      PRIMARY KEY (name, id)
+    )
+  `)
 }
