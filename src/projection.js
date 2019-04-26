@@ -66,20 +66,14 @@ async function applyEvent (pgPool, type, apply, offset, event) {
 }
 
 async function readProjectionId (pgClient, type) {
-  const result = await inTransaction(pgClient, async () => {
-    await pgClient.query(
-      `
-      INSERT INTO recluse.projection (type, next) VALUES ($1, 0)
-      ON CONFLICT (type) DO NOTHING
-      `,
-      [type]
-    )
-
-    return pgClient.query(
-      'SELECT id FROM recluse.projection WHERE type = $1',
-      [type]
-    )
-  })
+  const result = await pgClient.query(
+    `
+    INSERT INTO recluse.projection (type, next) VALUES ($1, 0)
+    ON CONFLICT (type) DO UPDATE SET type = $1
+    RETURNING id
+    `,
+    [type]
+  )
 
   if (result.rowCount < 1) throw new Error('Unable to read projection ID')
 
