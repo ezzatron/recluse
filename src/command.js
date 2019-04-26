@@ -23,7 +23,7 @@ function createCommandHandler (aggregates) {
     if (!mapped) throw new Error(`Unable to handle ${type} command - no suitable aggregates found`)
 
     const {aggregate, name} = mapped
-    const {applyEvent, createInitialState, eventTypes, handleCommand, routeCommand, type: aggregateType} = aggregate
+    const {applyEvent, createInitialState, eventTypes, handleCommand, routeCommand} = aggregate
     const stream = routeCommand(command)
 
     if (!stream) throw new Error(`Unable to handle ${type} command - no suitable route found`)
@@ -44,7 +44,7 @@ function createCommandHandler (aggregates) {
 
     await handleCommand({command, recordEvents, state})
 
-    return appendEvents(pgClient, aggregateType, stream, next, recordedEvents)
+    return appendEvents(pgClient, `aggregate.${name}`, stream, next, recordedEvents)
   }
 }
 

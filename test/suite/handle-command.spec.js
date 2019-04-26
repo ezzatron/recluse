@@ -9,14 +9,12 @@ const {readEventsByStream} = require('../../src/event.js')
 describe('handleCommand()', pgSpec(function () {
   const nameA = 'aggregate-name-a'
   const nameB = 'aggregate-name-b'
-  const typeA = 'aggregate-type-a'
   const commandTypeA = 'command-type-a'
   const commandTypeB = 'command-type-b'
   const eventTypeA = 'event-type-a'
   const eventTypeB = 'event-type-b'
 
   const emptyAggregate = {
-    type: typeA,
     commandTypes: [],
     eventTypes: [],
     routeCommand: () => {},
@@ -92,7 +90,7 @@ describe('handleCommand()', pgSpec(function () {
 
     expect(isHandled).to.be.true()
     expect(await this.query('SELECT * FROM recluse.stream')).to.have.rows([
-      {instance, type: typeA},
+      {instance, type: `aggregate.${nameA}`},
     ])
   })
 

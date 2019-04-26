@@ -11,7 +11,6 @@ const {UNIQUE_VIOLATION} = require('../../src/pg.js')
 
 describe('maintainCommandHandler()', pgSpec(function () {
   const nameA = 'aggregate-name-a'
-  const typeA = 'aggregate-type-a'
   const instanceA = 'aggregate-instance-a'
   const sourceA = 'command-source-a'
   const commandTypeA = 'command-type-a'
@@ -30,7 +29,6 @@ describe('maintainCommandHandler()', pgSpec(function () {
 
     this.handleCommand = createCommandHandler({
       [nameA]: {
-        type: typeA,
         commandTypes: [commandTypeA, commandTypeB],
         eventTypes: [eventTypeA, eventTypeB],
         routeCommand: () => instanceA,
