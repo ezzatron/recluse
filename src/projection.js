@@ -9,8 +9,8 @@ module.exports = {
 }
 
 function maintainProjection (pgPool, name, apply, options = {}) {
-  const {timeout, clock} = options
-  const iterator = createProjectionIterator(pgPool, name, apply, timeout, clock)
+  const {timeout, type = `projection.${name}`, clock} = options
+  const iterator = createProjectionIterator(pgPool, type, apply, timeout, clock)
 
   return {
     [Symbol.asyncIterator]: () => iterator,
@@ -18,7 +18,7 @@ function maintainProjection (pgPool, name, apply, options = {}) {
   }
 }
 
-function createProjectionIterator (pgPool, name, apply, timeout, clock) {
+function createProjectionIterator (pgPool, type, apply, timeout, clock) {
   let id, offset, iterator, pgClient
   let isLocked = false
 
@@ -27,7 +27,7 @@ function createProjectionIterator (pgPool, name, apply, timeout, clock) {
       if (!iterator) {
         pgClient = await pgPool.connect()
 
-        id = await readProjectionId(pgClient, name)
+        id = await readProjectionId(pgClient, type)
         await acquireSessionLock(pgClient, LOCK_NAMESPACE, id)
         isLocked = true
 
@@ -36,7 +36,7 @@ function createProjectionIterator (pgPool, name, apply, timeout, clock) {
       }
 
       const {value: {event}} = await iterator.next()
-      const value = await applyEvent(pgPool, name, apply, offset++, event)
+      const value = await applyEvent(pgPool, type, apply, offset++, event)
 
       return {done: false, value}
     },
@@ -51,12 +51,12 @@ function createProjectionIterator (pgPool, name, apply, timeout, clock) {
   }
 }
 
-async function applyEvent (pgPool, name, apply, offset, event) {
+async function applyEvent (pgPool, type, apply, offset, event) {
   const pgClient = await pgPool.connect()
 
   try {
     return inTransaction(pgClient, async () => {
-      await incrementProjection(pgClient, name, offset)
+      await incrementProjection(pgClient, type, offset)
 
       return apply(pgClient, event)
     })
@@ -65,19 +65,19 @@ async function applyEvent (pgPool, name, apply, offset, event) {
   }
 }
 
-async function readProjectionId (pgClient, name) {
+async function readProjectionId (pgClient, type) {
   const result = await inTransaction(pgClient, async () => {
     await pgClient.query(
       `
-      INSERT INTO recluse.projection (name, next) VALUES ($1, 0)
-      ON CONFLICT (name) DO NOTHING
+      INSERT INTO recluse.projection (type, next) VALUES ($1, 0)
+      ON CONFLICT (type) DO NOTHING
       `,
-      [name]
+      [type]
     )
 
     return pgClient.query(
-      'SELECT id FROM recluse.projection WHERE name = $1',
-      [name]
+      'SELECT id FROM recluse.projection WHERE type = $1',
+      [type]
     )
   })
 
@@ -97,10 +97,10 @@ async function readProjectionNext (pgClient, id) {
   return parseInt(result.rows[0].next)
 }
 
-async function incrementProjection (pgClient, name, offset) {
+async function incrementProjection (pgClient, type, offset) {
   const result = await pgClient.query(
-    'UPDATE recluse.projection SET next = $2 + 1 WHERE name = $1 AND next = $2',
-    [name, offset]
+    'UPDATE recluse.projection SET next = $2 + 1 WHERE type = $1 AND next = $2',
+    [type, offset]
   )
 
   if (result.rowCount !== 1) throw new Error('Unable to lock projection for updating')

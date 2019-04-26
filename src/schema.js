@@ -89,11 +89,11 @@ async function initializeSchema (pgClient) {
     CREATE TABLE IF NOT EXISTS recluse.projection
     (
       id bigint NOT NULL DEFAULT nextval('recluse.projection_id_seq'),
-      name text NOT NULL,
+      type text NOT NULL,
       next bigint NOT NULL,
 
       PRIMARY KEY (id),
-      UNIQUE (name)
+      UNIQUE (type)
     )
   `)
 
