@@ -31,7 +31,7 @@ async function initializeSchema (pgClient) {
       next bigint NOT NULL,
 
       PRIMARY KEY (id),
-      UNIQUE (instance)
+      UNIQUE (type, instance)
     )
   `)
 

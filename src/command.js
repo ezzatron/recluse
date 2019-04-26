@@ -24,11 +24,12 @@ function createCommandHandler (aggregates) {
 
     const {aggregate, name} = mapped
     const {applyEvent, createInitialState, eventTypes, handleCommand, routeCommand} = aggregate
-    const stream = routeCommand(command)
+    const streamType = `aggregate.${name}`
+    const instance = routeCommand(command)
 
-    if (!stream) throw new Error(`Unable to handle ${type} command - no suitable route found`)
+    if (!instance) throw new Error(`Unable to handle ${type} command - no suitable route found`)
 
-    const {state, next} = await readState(pgClient, stream, applyEvent, createInitialState())
+    const {state, next} = await readState(pgClient, streamType, instance, applyEvent, createInitialState())
     const recordedEvents = []
 
     function recordEvents (...events) {
@@ -44,7 +45,7 @@ function createCommandHandler (aggregates) {
 
     await handleCommand({command, recordEvents, state})
 
-    return appendEvents(pgClient, `aggregate.${name}`, stream, next, recordedEvents)
+    return appendEvents(pgClient, streamType, instance, next, recordedEvents)
   }
 }
 
@@ -163,8 +164,8 @@ function createTypeMapping (aggregates) {
   return index
 }
 
-async function readState (pgClient, stream, applyEvent, state) {
-  const events = readEventsByStream(pgClient, stream)
+async function readState (pgClient, streamType, instance, applyEvent, state) {
+  const events = readEventsByStream(pgClient, streamType, instance)
   let next = 0
 
   for await (const wrapper of events) {

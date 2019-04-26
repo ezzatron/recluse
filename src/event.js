@@ -14,7 +14,7 @@ async function appendEvents (pgClient, type, instance, start, events) {
 
   const [isUpdated, streamId] = start === 0
     ? await insertStream(pgClient, type, instance, next)
-    : await updateStreamOffset(pgClient, instance, start, next)
+    : await updateStreamOffset(pgClient, type, instance, start, next)
 
   if (!isUpdated) return false
 
@@ -37,17 +37,18 @@ function readEvents (pgClient, offset = 0) {
   ))
 }
 
-function readEventsByStream (pgClient, instance, offset = 0) {
+function readEventsByStream (pgClient, type, instance, offset = 0) {
+  if (!type) throw new Error('Invalid stream type')
   if (!instance) throw new Error('Invalid stream instance')
 
   return pgClient.query(asyncQuery(
     `
     SELECT e.* FROM recluse.event AS e
     INNER JOIN recluse.stream AS s ON s.id = e.stream_id
-    WHERE s.instance = $1 AND e.stream_offset >= $2
+    WHERE s.type = $1 AND s.instance = $2 AND e.stream_offset >= $3
     ORDER BY e.stream_offset
     `,
-    [instance, offset],
+    [type, instance, offset],
     marshal
   ))
 }
@@ -103,10 +104,10 @@ async function updateGlobalOffset (pgClient, count) {
   return result.rows[0].next - count
 }
 
-async function updateStreamOffset (pgClient, instance, start, next) {
+async function updateStreamOffset (pgClient, type, instance, start, next) {
   const result = await pgClient.query(
-    'UPDATE recluse.stream SET next = $1 WHERE instance = $2 AND next = $3 RETURNING id',
-    [next, instance, start]
+    'UPDATE recluse.stream SET next = $1 WHERE type = $2 AND instance = $3 AND next = $4 RETURNING id',
+    [next, type, instance, start]
   )
 
   return result.rowCount > 0 ? [true, result.rows[0].id] : [false, null]

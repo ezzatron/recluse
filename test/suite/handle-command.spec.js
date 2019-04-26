@@ -9,6 +9,8 @@ const {readEventsByStream} = require('../../src/event.js')
 describe('handleCommand()', pgSpec(function () {
   const nameA = 'aggregate-name-a'
   const nameB = 'aggregate-name-b'
+  const streamTypeA = `aggregate.${nameA}`
+  const streamTypeB = `aggregate.${nameB}`
   const commandTypeA = 'command-type-a'
   const commandTypeB = 'command-type-b'
   const eventTypeA = 'event-type-a'
@@ -64,7 +66,7 @@ describe('handleCommand()', pgSpec(function () {
       isHandled.push(await handleCommand(this.pgClient, createCommandB(333)))
     })
 
-    const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, instance))
+    const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, streamTypeA, instance))
 
     expect(isHandled).to.deep.equal([true, true, true])
     expect(events).to.have.length(3)
@@ -121,7 +123,7 @@ describe('handleCommand()', pgSpec(function () {
     })
 
     const isHandled = await this.inTransaction(async () => handleCommand(this.pgClient, createCommandA()))
-    const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, instance))
+    const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, streamTypeA, instance))
 
     expect(isHandled).to.be.true()
     expect(events).to.have.length(3)
@@ -164,7 +166,7 @@ describe('handleCommand()', pgSpec(function () {
       error = e
     }
     isHandled.push(await this.inTransaction(async () => handleCommand(this.pgClient, createCommandA(true))))
-    const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, instance))
+    const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, streamTypeA, instance))
 
     expect(isHandled).to.deep.equal([true, true])
     expect(error).to.equal(notOkay)
@@ -204,8 +206,8 @@ describe('handleCommand()', pgSpec(function () {
       isHandled.push(await handleCommand(this.pgClient, createCommandA(instanceB, 444)))
     })
 
-    const [eventsA] = await asyncIterableToArray(readEventsByStream(this.pgClient, instanceA))
-    const [eventsB] = await asyncIterableToArray(readEventsByStream(this.pgClient, instanceB))
+    const [eventsA] = await asyncIterableToArray(readEventsByStream(this.pgClient, streamTypeA, instanceA))
+    const [eventsB] = await asyncIterableToArray(readEventsByStream(this.pgClient, streamTypeA, instanceB))
 
     expect(isHandled).to.deep.equal([true, true, true, true])
     expect(eventsA).to.have.length(2)
@@ -251,8 +253,8 @@ describe('handleCommand()', pgSpec(function () {
       isHandled.push(await handleCommand(this.pgClient, createCommandB()))
     })
 
-    const [eventsA] = await asyncIterableToArray(readEventsByStream(this.pgClient, instanceA))
-    const [eventsB] = await asyncIterableToArray(readEventsByStream(this.pgClient, instanceB))
+    const [eventsA] = await asyncIterableToArray(readEventsByStream(this.pgClient, streamTypeA, instanceA))
+    const [eventsB] = await asyncIterableToArray(readEventsByStream(this.pgClient, streamTypeB, instanceB))
 
     expect(isHandled).to.deep.equal([true, true, true, true])
     expect(eventsA).to.have.length(2)
