@@ -47,9 +47,9 @@ async function initializeSchema (pgClient) {
     CREATE TABLE IF NOT EXISTS recluse.event
     (
       global_offset bigint NOT NULL,
-      type text NOT NULL,
       stream_id bigint NOT NULL,
       stream_offset bigint NOT NULL,
+      type text NOT NULL,
       data bytea DEFAULT NULL,
       time timestamp with time zone NOT NULL DEFAULT now(),
 
