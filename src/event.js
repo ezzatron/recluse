@@ -3,6 +3,7 @@ const {EVENT: CHANNEL} = require('./channel.js')
 
 module.exports = {
   appendEvents,
+  appendEventsUnchecked,
   readEvents,
   readEventsByStream,
   readEventsContinuously,
@@ -29,6 +30,21 @@ async function appendEvents (pgClient, type, instance, start, events) {
   return true
 }
 
+async function appendEventsUnchecked (pgClient, type, instance, events) {
+  const count = events.length
+
+  const [streamId, start] = await updateStreamOffsetUnchecked(pgClient, type, instance, count)
+  const offset = await updateGlobalOffset(pgClient, count)
+
+  for (let i = 0; i < count; ++i) {
+    await insertEvent(pgClient, offset + i, streamId, start + i, events[i])
+  }
+
+  await pgClient.query(`NOTIFY ${CHANNEL}`)
+
+  return true
+}
+
 function readEvents (pgClient, offset = 0) {
   return pgClient.query(asyncQuery(
     'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
@@ -38,8 +54,8 @@ function readEvents (pgClient, offset = 0) {
 }
 
 function readEventsByStream (pgClient, type, instance, offset = 0) {
-  if (!type) throw new Error('Invalid stream type')
-  if (!instance) throw new Error('Invalid stream instance')
+  if (typeof type !== 'string') throw new Error('Invalid stream type')
+  if (typeof instance !== 'string') throw new Error('Invalid stream instance')
 
   return pgClient.query(asyncQuery(
     `
@@ -91,6 +107,29 @@ async function insertStream (pgClient, type, instance, next) {
   return [true, result.rows[0].id]
 }
 
+async function updateStreamOffset (pgClient, type, instance, start, next) {
+  const result = await pgClient.query(
+    'UPDATE recluse.stream SET next = $1 WHERE type = $2 AND instance = $3 AND next = $4 RETURNING id',
+    [next, type, instance, start]
+  )
+
+  return result.rowCount > 0 ? [true, result.rows[0].id] : [false, null]
+}
+
+async function updateStreamOffsetUnchecked (pgClient, type, instance, count) {
+  const result = await pgClient.query(
+    `
+    INSERT INTO recluse.stream AS s (type, instance, next) VALUES ($1, $2, $3)
+    ON CONFLICT (type, instance) DO UPDATE SET next = s.next + $3
+    RETURNING id, next
+    `,
+    [type, instance, count]
+  )
+  const {id, next} = result.rows[0]
+
+  return [id, next - count]
+}
+
 async function updateGlobalOffset (pgClient, count) {
   const result = await pgClient.query(
     `
@@ -102,15 +141,6 @@ async function updateGlobalOffset (pgClient, count) {
   )
 
   return result.rows[0].next - count
-}
-
-async function updateStreamOffset (pgClient, type, instance, start, next) {
-  const result = await pgClient.query(
-    'UPDATE recluse.stream SET next = $1 WHERE type = $2 AND instance = $3 AND next = $4 RETURNING id',
-    [next, type, instance, start]
-  )
-
-  return result.rowCount > 0 ? [true, result.rows[0].id] : [false, null]
 }
 
 function marshal (row) {

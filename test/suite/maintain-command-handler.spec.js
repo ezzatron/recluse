@@ -27,21 +27,24 @@ describe('maintainCommandHandler()', pgSpec(function () {
 
     await initializeSchema(this.pgClient)
 
-    this.handleCommand = createCommandHandler({
-      [nameA]: {
-        commandTypes: [commandTypeA, commandTypeB],
-        eventTypes: [eventTypeA, eventTypeB],
-        routeCommand: () => instanceA,
-        createInitialState: () => {},
-        handleCommand: ({command: {type, data}, recordEvents}) => {
-          switch (type) {
-            case commandTypeA: return recordEvents({type: eventTypeA, data})
-            case commandTypeB: return recordEvents({type: eventTypeB, data})
-          }
+    this.handleCommand = createCommandHandler(
+      {
+        [nameA]: {
+          commandTypes: [commandTypeA, commandTypeB],
+          eventTypes: [eventTypeA, eventTypeB],
+          routeCommand: () => instanceA,
+          createInitialState: () => {},
+          handleCommand: ({command: {type, data}, recordEvents}) => {
+            switch (type) {
+              case commandTypeA: return recordEvents({type: eventTypeA, data})
+              case commandTypeB: return recordEvents({type: eventTypeB, data})
+            }
+          },
+          applyEvent: () => {},
         },
-        applyEvent: () => {},
       },
-    })
+      {}
+    )
   })
 
   afterEach(function () {

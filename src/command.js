@@ -1,7 +1,7 @@
 const {acquireAsyncIterator} = require('./iterator.js')
 const {acquireSessionLock, asyncQuery, continuousQuery, inTransaction, releaseSessionLock} = require('./pg.js')
 const {allSerial} = require('./async.js')
-const {appendEvents, readEventsByStream} = require('./event.js')
+const {appendEvents, appendEventsUnchecked, readEventsByStream} = require('./event.js')
 const {COMMAND: CHANNEL} = require('./channel.js')
 const {COMMAND: LOCK_NAMESPACE} = require('./lock.js')
 
@@ -13,39 +13,28 @@ module.exports = {
   readUnhandledCommandsContinuously,
 }
 
-function createCommandHandler (aggregates) {
-  const mapping = createTypeMapping(aggregates)
+const HANDLER_TYPE_AGGREGATE = 'aggregate'
+const HANDLER_TYPE_INTEGRATION = 'integration'
+
+function createCommandHandler (aggregates, integrations) {
+  if (!aggregates) throw new Error('Invalid aggregates')
+  if (!integrations) throw new Error('Invalid integrations')
+
+  const mapping = createTypeMapping(aggregates, integrations)
 
   return async function handleCommand (pgClient, command) {
     const {type} = command
     const mapped = mapping[type]
 
-    if (!mapped) throw new Error(`Unable to handle ${type} command - no suitable aggregates found`)
+    if (!mapped) throw new Error(`Unable to handle ${type} command - no suitable handler found`)
 
-    const {aggregate, name} = mapped
-    const {applyEvent, createInitialState, eventTypes, handleCommand, routeCommand} = aggregate
-    const streamType = `aggregate.${name}`
-    const instance = routeCommand(command)
+    const {handler, name} = mapped
 
-    if (!instance) throw new Error(`Unable to handle ${type} command - no suitable route found`)
-
-    const {state, next} = await readState(pgClient, streamType, instance, applyEvent, createInitialState())
-    const recordedEvents = []
-
-    function recordEvents (...events) {
-      events.forEach(event => {
-        const {type} = event
-
-        if (!eventTypes.includes(type)) throw new Error(`Aggregate ${name} cannot record ${type} events`)
-
-        recordedEvents.push(event)
-        applyEvent(state, event)
-      })
+    if (mapped.handlerType === HANDLER_TYPE_INTEGRATION) {
+      return handleCommandWithIntegration(pgClient, name, handler, command)
     }
 
-    await handleCommand({command, recordEvents, state})
-
-    return appendEvents(pgClient, streamType, instance, next, recordedEvents)
+    return handleCommandWithAggregate(pgClient, name, handler, command)
   }
 }
 
@@ -151,20 +140,88 @@ function readUnhandledCommandsContinuously (pgClient, options = {}) {
   )
 }
 
-function createTypeMapping (aggregates) {
+function createTypeMapping (aggregates, integrations) {
   const index = {}
 
-  for (const name in aggregates) {
-    const aggregate = aggregates[name]
-    const {commandTypes} = aggregate
-
-    commandTypes.forEach(type => { index[type] = {aggregate, name} })
-  }
+  addTypeMappingEntries(index, HANDLER_TYPE_AGGREGATE, aggregates)
+  addTypeMappingEntries(index, HANDLER_TYPE_INTEGRATION, integrations)
 
   return index
 }
 
-async function readState (pgClient, streamType, instance, applyEvent, state) {
+function addTypeMappingEntries (index, handlerType, handlers) {
+  for (const name in handlers) {
+    const handler = handlers[name]
+
+    handler.commandTypes.forEach(type => addTypeMappingEntry(index, type, {handler, handlerType, name}))
+  }
+}
+
+function addTypeMappingEntry (index, type, entry) {
+  if (!index[type]) {
+    index[type] = entry
+
+    return
+  }
+
+  const {handlerType: existingHandlerType, name: existingName} = index[type]
+  const {handlerType: entryHandlerType, name: entryName} = entry
+
+  throw new Error(
+    `Commands of type ${type} are already handled by the ${existingName} ${existingHandlerType}, ` +
+    `and cannot be handled by the ${entryName} ${entryHandlerType}`
+  )
+}
+
+async function handleCommandWithAggregate (pgClient, name, aggregate, command) {
+  const {applyEvent, createInitialState, eventTypes, handleCommand, routeCommand} = aggregate
+  const {type} = command
+  const instance = routeCommand(command)
+
+  if (!instance) throw new Error(`Unable to handle ${type} command - no suitable route found`)
+
+  const streamType = `aggregate.${name}`
+  const {state, next} = await readAggregateState(pgClient, streamType, instance, applyEvent, createInitialState())
+  const recordedEvents = []
+
+  function recordEvents (...events) {
+    events.forEach(event => {
+      const {type} = event
+
+      if (!eventTypes.includes(type)) throw new Error(`Aggregate ${name} cannot record ${type} events`)
+
+      recordedEvents.push(event)
+      applyEvent(state, event)
+    })
+  }
+
+  await handleCommand({command, recordEvents, state})
+
+  return appendEvents(pgClient, streamType, instance, next, recordedEvents)
+}
+
+async function handleCommandWithIntegration (pgClient, name, integration, command) {
+  const {eventTypes, handleCommand} = integration
+
+  const streamType = `integration.${name}`
+  const recordedEvents = []
+
+  function recordEvents (...events) {
+    events.forEach(event => {
+      const {type} = event
+
+      if (!eventTypes.includes(type)) throw new Error(`Integration ${name} cannot record ${type} events`)
+
+      recordedEvents.push(event)
+    })
+  }
+
+  await handleCommand({command, recordEvents})
+
+  return appendEventsUnchecked(pgClient, streamType, '', recordedEvents)
+}
+
+async function readAggregateState (pgClient, streamType, instance, applyEvent, state) {
   const events = readEventsByStream(pgClient, streamType, instance)
   let next = 0
 
