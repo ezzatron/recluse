@@ -11,7 +11,7 @@ const {readCommands} = require('../../src/command.js')
 
 describe('maintainProcess()', pgSpec(function () {
   const nameA = 'process-name-a'
-  const idA = 'process-id-a'
+  const instanceA = 'process-instance-a'
   const streamTypeA = 'stream-type-a'
   const streamNameA = 'stream-name-a'
   const eventTypeA = 'event-type-a'
@@ -26,7 +26,7 @@ describe('maintainProcess()', pgSpec(function () {
   const emptyProcess = {
     eventTypes: [],
     commandTypes: [],
-    routeEvent: () => idA,
+    routeEvent: () => instanceA,
     createInitialState: () => jsonBuffer(null),
     handleEvent: () => {},
   }
@@ -167,12 +167,12 @@ describe('maintainProcess()', pgSpec(function () {
       expect(commands[0].command).to.have.fields({type: commandTypeA, data: jsonBuffer({type: eventTypeA})})
     })
 
-    it('should ignore event types that do not route to a process ID', async function () {
+    it('should ignore event types that do not route to a process instance', async function () {
       const process = {
         ...emptyProcess,
         eventTypes: [eventTypeA, eventTypeB],
         commandTypes: [commandTypeA],
-        routeEvent: ({type}) => type === eventTypeA ? idA : null,
+        routeEvent: ({type}) => type === eventTypeA ? instanceA : null,
         handleEvent: async ({event: {type}, executeCommands}) => {
           executeCommands({type: commandTypeA, data: jsonBuffer({type})})
         },

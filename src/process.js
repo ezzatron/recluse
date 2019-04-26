@@ -14,11 +14,11 @@ function maintainProcess (pgPool, name, process, options = {}) {
   async function apply (pgClient, event) {
     if (!eventTypes.includes(event.type)) return false
 
-    const id = routeEvent(event)
+    const instance = routeEvent(event)
 
-    if (!id) return false
+    if (!instance) return false
 
-    const state = await readState(pgClient, id, createInitialState)
+    const state = await readState(pgClient, instance, createInitialState)
 
     let shouldReplaceState = false
     let nextState
@@ -41,7 +41,7 @@ function maintainProcess (pgPool, name, process, options = {}) {
 
     await handleEvent({event, executeCommands, replaceState, state})
     await executeCommandsRaw(pgClient, processName, executedCommands)
-    if (shouldReplaceState) await writeState(pgClient, name, id, nextState)
+    if (shouldReplaceState) await writeState(pgClient, name, instance, nextState)
 
     return true
   }
@@ -49,23 +49,23 @@ function maintainProcess (pgPool, name, process, options = {}) {
   return maintainProjection(pgPool, projectionName, apply, {timeout, clock})
 }
 
-async function readState (pgClient, id, createInitialState) {
+async function readState (pgClient, instance, createInitialState) {
   const result = await pgClient.query(
-    'SELECT data FROM recluse.process WHERE id = $1',
-    [id]
+    'SELECT state FROM recluse.process WHERE instance = $1',
+    [instance]
   )
 
-  if (result.rowCount > 0) return result.rows[0].data
+  if (result.rowCount > 0) return result.rows[0].state
 
   return createInitialState()
 }
 
-async function writeState (pgClient, name, id, state) {
+async function writeState (pgClient, name, instance, state) {
   await pgClient.query(
     `
-    INSERT INTO recluse.process (name, id, data) VALUES ($1, $2, $3)
-    ON CONFLICT (name, id) DO UPDATE SET data = $3
+    INSERT INTO recluse.process (name, instance, state) VALUES ($1, $2, $3)
+    ON CONFLICT (name, instance) DO UPDATE SET state = $3
     `,
-    [name, id, state]
+    [name, instance, state]
   )
 }

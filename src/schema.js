@@ -105,10 +105,10 @@ async function initializeSchema (pgClient) {
     CREATE TABLE IF NOT EXISTS recluse.process
     (
       name text NOT NULL,
-      id text NOT NULL,
-      data bytea DEFAULT NULL,
+      instance text NOT NULL,
+      state bytea DEFAULT NULL,
 
-      PRIMARY KEY (name, id)
+      PRIMARY KEY (name, instance)
     )
   `)
 }
