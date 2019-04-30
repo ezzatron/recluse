@@ -25,10 +25,9 @@ async function allSerial (...fns) {
   }
 
   if (errors.length < 1) return results
-  if (errors.length < 2) throw errors[0]
 
-  const messageList = errors.map(({message}) => `\n  - ${message}`)
-  const error = new Error(`Multple errors occurred:${messageList}`)
+  const messageList = errors.map(({message}) => `\n  - ${message}`).join('')
+  const error = new Error(`Error(s) occurred:${messageList}`)
   error.errors = errors
 
   throw error
