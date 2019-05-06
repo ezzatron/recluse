@@ -36,7 +36,7 @@ describe('maintainCommandHandler()', pgSpec(function () {
           eventTypes: [eventTypeA, eventTypeB],
           routeCommand: () => instanceA,
           createInitialState: () => null,
-          handleCommand: ({command: {type, data}, recordEvents}) => {
+          handleCommand: async ({command: {type, data}, recordEvents}) => {
             switch (type) {
               case commandTypeA: return recordEvents({type: eventTypeA, data})
               case commandTypeB: return recordEvents({type: eventTypeB, data})

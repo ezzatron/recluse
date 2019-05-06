@@ -1,3 +1,4 @@
+const {createStateController} = require('./state.js')
 const {executeCommands: executeCommandsRaw} = require('./command.js')
 const {maintainProjection} = require('./projection.js')
 const {PROCESS} = require('./handler.js')
@@ -7,6 +8,7 @@ module.exports = {
 }
 
 function maintainProcess (serialization, pgPool, name, process, options = {}) {
+  const {copy} = serialization
   const processType = `process.${name}`
   const {commandTypes, createInitialState, eventTypes, handleEvent, routeEvent} = process
   const {timeout, clock} = options
@@ -18,10 +20,6 @@ function maintainProcess (serialization, pgPool, name, process, options = {}) {
 
     if (!instance) return false
 
-    const state = await readState(serialization, pgClient, name, processType, instance, createInitialState)
-
-    let shouldReplaceState = false
-    let nextState
     const executedCommands = []
 
     function executeCommands (...commands) {
@@ -36,14 +34,18 @@ function maintainProcess (serialization, pgPool, name, process, options = {}) {
       })
     }
 
-    function replaceState (state) {
-      shouldReplaceState = true
-      nextState = state
-    }
+    const {getState, isUpdated, readState, updateState} = createStateController(
+      copy,
+      async () => readProcessState(serialization, pgClient, name, processType, instance, createInitialState)
+    )
 
-    await handleEvent({event, executeCommands, replaceState, state})
+    await handleEvent({event, executeCommands, readState, updateState})
     await executeCommandsRaw(serialization, pgClient, processType, executedCommands)
-    if (shouldReplaceState) await writeState(serialization, pgClient, name, processType, instance, nextState)
+
+    if (isUpdated()) {
+      const state = await getState()
+      await writeState(serialization, pgClient, name, processType, instance, state)
+    }
 
     return true
   }
@@ -51,7 +53,7 @@ function maintainProcess (serialization, pgPool, name, process, options = {}) {
   return maintainProjection(serialization, pgPool, processType, apply, {timeout, clock})
 }
 
-async function readState (serialization, pgClient, name, processType, instance, createInitialState) {
+async function readProcessState (serialization, pgClient, name, processType, instance, createInitialState) {
   const result = await pgClient.query(
     'SELECT state FROM recluse.process WHERE type = $1 AND instance = $2',
     [processType, instance]

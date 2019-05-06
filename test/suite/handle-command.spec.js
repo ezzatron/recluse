@@ -174,17 +174,19 @@ describe('handleCommand()', pgSpec(function () {
             routeCommand: () => instance,
             createInitialState: () => ({a: 0, b: 0}),
 
-            handleCommand: ({state: {a, b}, command: {type, data: {increment}}, recordEvents}) => {
+            handleCommand: async ({command: {type, data: {increment}}, readState, recordEvents}) => {
+              const {a, b} = await readState()
+
               switch (type) {
                 case commandTypeA: return recordEvents({type: eventTypeA, data: {current: a, increment}})
                 case commandTypeB: return recordEvents({type: eventTypeB, data: {current: b, increment}})
               }
             },
 
-            applyEvent: (state, {type, data: {increment}}) => {
+            applyEvent: async ({event: {type, data: {increment}}, updateState}) => {
               switch (type) {
-                case eventTypeA: return (state.a += increment)
-                case eventTypeB: return (state.b += increment)
+                case eventTypeA: return updateState(state => { state.a += increment })
+                case eventTypeB: return updateState(state => { state.b += increment })
               }
             },
           },
@@ -220,18 +222,20 @@ describe('handleCommand()', pgSpec(function () {
             commandTypes: [commandTypeA],
             eventTypes: [eventTypeA],
             routeCommand: () => instance,
-            createInitialState: () => ({a: 0}),
+            createInitialState: () => 0,
 
-            handleCommand: ({state, recordEvents}) => {
-              recordEvents({type: eventTypeA, data: {value: state.a + 111}})
-              recordEvents(
-                {type: eventTypeA, data: {value: state.a + 111}},
-                {type: eventTypeA, data: {value: state.a + 111}}
-              )
+            handleCommand: async ({readState, recordEvents}) => {
+              let state
+
+              state = await readState()
+              await recordEvents({type: eventTypeA, data: {value: state + 111}})
+
+              state = await readState()
+              await recordEvents({type: eventTypeA, data: {value: state + 111}})
             },
 
-            applyEvent: (state, {data: {value}}) => {
-              state.a = value
+            applyEvent: async ({event: {data: {value}}, updateState}) => {
+              await updateState(value)
             },
           },
         },
@@ -243,10 +247,9 @@ describe('handleCommand()', pgSpec(function () {
         await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instance))
 
       expect(isHandled).to.be.true()
-      expect(events).to.have.length(3)
+      expect(events).to.have.length(2)
       expect(events[0].event).to.deep.equal({type: eventTypeA, data: {value: 111}})
       expect(events[1].event).to.deep.equal({type: eventTypeA, data: {value: 222}})
-      expect(events[2].event).to.deep.equal({type: eventTypeA, data: {value: 222}})
     })
 
     it('should not allow failures to affect the state for future calls', async function () {
@@ -261,16 +264,17 @@ describe('handleCommand()', pgSpec(function () {
             commandTypes: [commandTypeA],
             eventTypes: [eventTypeA],
             routeCommand: () => instance,
-            createInitialState: () => ({a: 0}),
+            createInitialState: () => 0,
 
-            handleCommand: ({state, command: {data: {isOkay}}, recordEvents}) => {
-              recordEvents({type: eventTypeA, data: {value: state.a + 111}})
+            handleCommand: async ({command: {data: {isOkay}}, readState, recordEvents}) => {
+              const state = await readState()
+              await recordEvents({type: eventTypeA, data: {value: state + 111}})
 
               if (!isOkay) throw notOkay
             },
 
-            applyEvent: (state, {data: {value}}) => {
-              state.a = value
+            applyEvent: async ({event: {data: {value}}, updateState}) => {
+              updateState(value)
             },
           },
         },
@@ -308,14 +312,15 @@ describe('handleCommand()', pgSpec(function () {
             commandTypes: [commandTypeA],
             eventTypes: [eventTypeA],
             routeCommand: ({data: {instance}}) => instance,
-            createInitialState: () => ({a: 0}),
+            createInitialState: () => 0,
 
-            handleCommand: ({state, command: {data: {increment}}, recordEvents}) => {
-              recordEvents({type: eventTypeA, data: {current: state.a, increment}})
+            handleCommand: async ({command: {data: {increment}}, readState, recordEvents}) => {
+              const state = await readState()
+              await recordEvents({type: eventTypeA, data: {current: state, increment}})
             },
 
-            applyEvent: (state, {data: {increment}}) => {
-              state.a += increment
+            applyEvent: async ({event: {type, data: {increment}}, updateState}) => {
+              await updateState(state => state + increment)
             },
           },
         },
@@ -357,11 +362,12 @@ describe('handleCommand()', pgSpec(function () {
             commandTypes: [commandTypeA],
             eventTypes: [eventTypeA],
             routeCommand: () => instanceA,
-            createInitialState: () => ({count: 0}),
-            handleCommand: ({state: {count}, recordEvents}) => {
-              recordEvents({type: eventTypeA, data: count})
+            createInitialState: () => 0,
+            handleCommand: async ({readState, recordEvents}) => {
+              const state = await readState()
+              await recordEvents({type: eventTypeA, data: state})
             },
-            applyEvent: state => ++state.count,
+            applyEvent: async ({updateState}) => updateState(state => ++state),
           },
 
           [aggregateNameB]: {
@@ -369,11 +375,12 @@ describe('handleCommand()', pgSpec(function () {
             commandTypes: [commandTypeB],
             eventTypes: [eventTypeA],
             routeCommand: () => instanceB,
-            createInitialState: () => ({count: 0}),
-            handleCommand: ({state: {count}, recordEvents}) => {
-              recordEvents({type: eventTypeA, data: count})
+            createInitialState: () => 0,
+            handleCommand: async ({readState, recordEvents}) => {
+              const state = await readState()
+              await recordEvents({type: eventTypeA, data: state})
             },
-            applyEvent: state => ++state.count,
+            applyEvent: async ({updateState}) => updateState(state => ++state),
           },
         },
         {}
@@ -409,7 +416,7 @@ describe('handleCommand()', pgSpec(function () {
             ...emptyAggregate,
             commandTypes: [commandTypeA],
             routeCommand: () => 'aggregate-instance-a',
-            handleCommand: ({recordEvents}) => recordEvents({type: eventTypeA}),
+            handleCommand: async ({recordEvents}) => recordEvents({type: eventTypeA}),
           },
         },
         {}
@@ -436,7 +443,7 @@ describe('handleCommand()', pgSpec(function () {
             commandTypes: [commandTypeA, commandTypeB],
             eventTypes: [eventTypeA, eventTypeB],
 
-            handleCommand: ({command: {type, data}, recordEvents}) => {
+            handleCommand: async ({command: {type, data}, recordEvents}) => {
               switch (type) {
                 case commandTypeA: return recordEvents({type: eventTypeA, data})
                 case commandTypeB: return recordEvents({type: eventTypeB, data})
@@ -474,8 +481,8 @@ describe('handleCommand()', pgSpec(function () {
             ...emptyIntegration,
             commandTypes: [commandTypeA],
             eventTypes: [eventTypeA],
-            handleCommand: ({command: {data}, recordEvents}) => {
-              recordEvents({type: eventTypeA, data})
+            handleCommand: async ({command: {data}, recordEvents}) => {
+              await recordEvents({type: eventTypeA, data})
             },
           },
 
@@ -483,8 +490,8 @@ describe('handleCommand()', pgSpec(function () {
             ...emptyIntegration,
             commandTypes: [commandTypeB],
             eventTypes: [eventTypeA],
-            handleCommand: ({command: {data}, recordEvents}) => {
-              recordEvents({type: eventTypeA, data})
+            handleCommand: async ({command: {data}, recordEvents}) => {
+              await recordEvents({type: eventTypeA, data})
             },
           },
         }
@@ -520,7 +527,7 @@ describe('handleCommand()', pgSpec(function () {
           [integrationNameA]: {
             ...emptyIntegration,
             commandTypes: [commandTypeA],
-            handleCommand: ({recordEvents}) => recordEvents({type: eventTypeA}),
+            handleCommand: async ({recordEvents}) => recordEvents({type: eventTypeA}),
           },
         },
         {}
