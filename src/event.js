@@ -7,6 +7,7 @@ module.exports = {
   readEvents,
   readEventsByStream,
   readEventsContinuously,
+  readNextStreamOffset,
 }
 
 async function appendEvents (pgClient, type, instance, start, events) {
@@ -79,6 +80,20 @@ function readEventsContinuously (pgClient, options = {}) {
     ({globalOffset}) => globalOffset + 1,
     {clock, marshal, offset, timeout}
   )
+}
+
+async function readNextStreamOffset (pgClient, type, instance) {
+  if (typeof type !== 'string') throw new Error('Invalid stream type')
+  if (typeof instance !== 'string') throw new Error('Invalid stream instance')
+
+  const result = await pgClient.query(
+    'SELECT next FROM recluse.stream WHERE type = $1 AND instance = $2',
+    [type, instance]
+  )
+
+  if (result.rowCount < 1) return 0
+
+  return parseInt(result.rows[0].next)
 }
 
 async function insertEvent (pgClient, offset, streamId, streamOffset, event) {
