@@ -11,10 +11,8 @@ describe('readEventsContinuously()', pgSpec(function () {
   const instanceB = 'stream-instance-b'
   const eventTypeA = 'event-type-a'
   const eventTypeB = 'event-type-b'
-  const eventDataA = Buffer.from('a')
-  const eventDataB = Buffer.from('b')
-  const eventA = {type: eventTypeA, data: eventDataA}
-  const eventB = {type: eventTypeB, data: eventDataB}
+  const eventA = {type: eventTypeA, data: Buffer.from('a')}
+  const eventB = {type: eventTypeB, data: Buffer.from('b')}
   const eventC = {type: eventTypeA, data: Buffer.from('c')}
   const eventD = {type: eventTypeB, data: Buffer.from('d')}
 
@@ -49,7 +47,7 @@ describe('readEventsContinuously()', pgSpec(function () {
         events => events.cancel(),
         wrapper => {
           expect(wrapper).to.have.fields(expectedWrappers.shift())
-          expect(wrapper.event).to.have.fields(expected.shift())
+          expect(wrapper.event).to.deep.equal(expected.shift())
         }
       )
     })
@@ -63,12 +61,12 @@ describe('readEventsContinuously()', pgSpec(function () {
       ]
 
       await consumeAsyncIterable(
-        readEventsContinuously(this.pgClient, {offset: 1}),
+        readEventsContinuously(this.pgClient, {start: 1}),
         expected.length,
         events => events.cancel(),
         wrapper => {
           expect(wrapper).to.have.fields(expectedWrappers.shift())
-          expect(wrapper.event).to.have.fields(expected.shift())
+          expect(wrapper.event).to.deep.equal(expected.shift())
         }
       )
     })
@@ -87,7 +85,7 @@ describe('readEventsContinuously()', pgSpec(function () {
         readEventsContinuously(this.pgClient),
         expected.length,
         events => events.cancel(),
-        ({event}) => expect(event).to.have.fields(expected.shift())
+        ({event}) => expect(event).to.deep.equal(expected.shift())
       )
     })
   })

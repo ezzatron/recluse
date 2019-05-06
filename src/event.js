@@ -46,39 +46,56 @@ async function appendEventsUnchecked (pgClient, type, instance, events) {
   return true
 }
 
-function readEvents (pgClient, offset = 0) {
-  return pgClient.query(asyncQuery(
-    'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
-    [offset],
-    marshal
-  ))
+function readEvents (pgClient, start = 0, end = Infinity) {
+  let text, params
+
+  if (isFinite(end)) {
+    text = 'SELECT * FROM recluse.event WHERE global_offset >= $1 AND global_offset < $2 ORDER BY global_offset'
+    params = [start, end]
+  } else {
+    text = 'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset'
+    params = [start]
+  }
+
+  return pgClient.query(asyncQuery(text, params, marshal))
 }
 
-function readEventsByStream (pgClient, type, instance, offset = 0) {
+function readEventsByStream (pgClient, type, instance, start = 0, end = Infinity) {
   if (typeof type !== 'string') throw new Error('Invalid stream type')
   if (typeof instance !== 'string') throw new Error('Invalid stream instance')
 
-  return pgClient.query(asyncQuery(
-    `
-    SELECT e.* FROM recluse.event AS e
-    INNER JOIN recluse.stream AS s ON s.id = e.stream_id
-    WHERE s.type = $1 AND s.instance = $2 AND e.stream_offset >= $3
-    ORDER BY e.stream_offset
-    `,
-    [type, instance, offset],
-    marshal
-  ))
+  let text, params
+
+  if (isFinite(end)) {
+    text = `
+      SELECT e.* FROM recluse.event AS e
+      INNER JOIN recluse.stream AS s ON s.id = e.stream_id
+      WHERE s.type = $1 AND s.instance = $2 AND e.stream_offset >= $3 AND e.stream_offset < $4
+      ORDER BY e.stream_offset
+      `
+    params = [type, instance, start, end]
+  } else {
+    text = `
+      SELECT e.* FROM recluse.event AS e
+      INNER JOIN recluse.stream AS s ON s.id = e.stream_id
+      WHERE s.type = $1 AND s.instance = $2 AND e.stream_offset >= $3
+      ORDER BY e.stream_offset
+      `
+    params = [type, instance, start]
+  }
+
+  return pgClient.query(asyncQuery(text, params, marshal))
 }
 
 function readEventsContinuously (pgClient, options = {}) {
-  const {clock, offset, timeout} = options
+  const {clock, start, timeout} = options
 
   return continuousQuery(
     pgClient,
     'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
     CHANNEL,
     ({globalOffset}) => globalOffset + 1,
-    {clock, marshal, offset, timeout}
+    {clock, marshal, start, timeout}
   )
 }
 

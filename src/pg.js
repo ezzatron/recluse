@@ -52,9 +52,9 @@ function configure () {
 }
 
 function continuousQuery (pgClient, text, channel, nextOffset, options = {}) {
-  const {extraValues = [], marshal = identity, offset = 0, timeout = 100, clock = systemClock} = options
+  const {extraValues = [], marshal = identity, start = 0, timeout = 100, clock = systemClock} = options
   const iterator =
-    createContinuousQueryIterator(pgClient, text, offset, nextOffset, extraValues, marshal, channel, timeout, clock)
+    createContinuousQueryIterator(pgClient, text, start, nextOffset, extraValues, marshal, channel, timeout, clock)
 
   return {
     [Symbol.asyncIterator]: () => iterator,
@@ -138,7 +138,7 @@ function createCursorIterator (cursor, marshal = identity) {
 function createContinuousQueryIterator (
   pgClient,
   text,
-  offset,
+  start,
   nextOffset,
   extraValues,
   marshal,
@@ -146,7 +146,7 @@ function createContinuousQueryIterator (
   timeout,
   clock
 ) {
-  let next = offset
+  let next = start
   let isListening = false
   let iterator = null
   let nextNotification = null

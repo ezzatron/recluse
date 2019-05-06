@@ -19,7 +19,7 @@ function maintainProjection (pgPool, name, apply, options = {}) {
 }
 
 function createProjectionIterator (pgPool, type, apply, timeout, clock) {
-  let id, offset, iterator, pgClient
+  let id, start, iterator, pgClient
   let isLocked = false
 
   return {
@@ -31,12 +31,12 @@ function createProjectionIterator (pgPool, type, apply, timeout, clock) {
         await acquireSessionLock(pgClient, LOCK_NAMESPACE, id)
         isLocked = true
 
-        offset = await readProjectionNext(pgClient, id)
-        iterator = acquireAsyncIterator(readEventsContinuously(pgClient, {offset, timeout, clock}))
+        start = await readProjectionNext(pgClient, id)
+        iterator = acquireAsyncIterator(readEventsContinuously(pgClient, {start, timeout, clock}))
       }
 
       const {value: {event}} = await iterator.next()
-      const value = await applyEvent(pgPool, type, apply, offset++, event)
+      const value = await applyEvent(pgPool, type, apply, start++, event)
 
       return {done: false, value}
     },

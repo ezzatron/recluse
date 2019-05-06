@@ -11,10 +11,8 @@ describe('readEventsByStream()', pgSpec(function () {
   const instanceB = 'stream-instance-b'
   const eventTypeA = 'event-type-a'
   const eventTypeB = 'event-type-b'
-  const eventDataA = Buffer.from('a')
-  const eventDataB = Buffer.from('b')
-  const eventA = {type: eventTypeA, data: eventDataA}
-  const eventB = {type: eventTypeB, data: eventDataB}
+  const eventA = {type: eventTypeA, data: Buffer.from('a')}
+  const eventB = {type: eventTypeB, data: Buffer.from('b')}
   const eventC = {type: eventTypeA, data: Buffer.from('c')}
   const eventD = {type: eventTypeB, data: Buffer.from('d')}
 
@@ -23,14 +21,29 @@ describe('readEventsByStream()', pgSpec(function () {
   })
 
   context('with an empty stream', function () {
-    it('should return an empty result for offset 0', async function () {
+    it('should return an empty result for start offset 0', async function () {
       const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA))
 
       expect(events).to.have.length(0)
     })
 
-    it('should return an empty result for positive offsets', async function () {
-      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA, 111))
+    it('should return an empty result for start offset 0 with a positive end offset', async function () {
+      const [events] =
+        await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA, 0, 111))
+
+      expect(events).to.have.length(0)
+    })
+
+    it('should return an empty result for positive start offsets', async function () {
+      const [events] =
+        await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA, 111))
+
+      expect(events).to.have.length(0)
+    })
+
+    it('should return an empty result for positive start and end offsets', async function () {
+      const [events] =
+        await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA, 111, 222))
 
       expect(events).to.have.length(0)
     })
@@ -50,50 +63,60 @@ describe('readEventsByStream()', pgSpec(function () {
 
   context('with a non-empty stream', function () {
     beforeEach(async function () {
-      await appendEvents(this.pgClient, typeA, instanceA, 0, [eventA, eventB])
+      await appendEvents(this.pgClient, typeA, instanceA, 0, [eventA, eventB, eventC])
     })
 
-    it('should return the correct events for offset 0', async function () {
+    it('should return the correct events for start offset 0', async function () {
       const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA))
 
-      expect(events).to.have.length(2)
-      expect(events[0]).to.have.fields({
-        streamId: 0,
-        streamOffset: 0,
-        time: TIME_PATTERN,
-      })
-      expect(events[0].event).to.have.fields({
-        type: eventTypeA,
-        data: eventDataA,
-      })
-      expect(events[1]).to.have.fields({
-        streamId: 0,
-        streamOffset: 1,
-        time: TIME_PATTERN,
-      })
-      expect(events[1].event).to.have.fields({
-        type: eventTypeB,
-        data: eventDataB,
-      })
+      expect(events).to.have.length(3)
+      expect(events[0]).to.have.fields({streamId: 0, streamOffset: 0, time: TIME_PATTERN})
+      expect(events[0].event).to.deep.equal(eventA)
+      expect(events[1]).to.have.fields({streamId: 0, streamOffset: 1, time: TIME_PATTERN})
+      expect(events[1].event).to.deep.equal(eventB)
+      expect(events[2]).to.have.fields({streamId: 0, streamOffset: 2, time: TIME_PATTERN})
+      expect(events[2].event).to.deep.equal(eventC)
     })
 
-    it('should return the correct events for positive offsets that exist', async function () {
+    it('should return the correct events for start offset 0 with a positive end offset', async function () {
+      const [events] =
+        await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA, 0, 2))
+
+      expect(events).to.have.length(2)
+      expect(events[0]).to.have.fields({streamId: 0, streamOffset: 0, time: TIME_PATTERN})
+      expect(events[0].event).to.deep.equal(eventA)
+      expect(events[1]).to.have.fields({streamId: 0, streamOffset: 1, time: TIME_PATTERN})
+      expect(events[1].event).to.deep.equal(eventB)
+    })
+
+    it('should return the correct events for positive start offsets that exist', async function () {
       const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA, 1))
 
-      expect(events).to.have.length(1)
-      expect(events[0]).to.have.fields({
-        streamId: 0,
-        streamOffset: 1,
-        time: TIME_PATTERN,
-      })
-      expect(events[0].event).to.have.fields({
-        type: eventTypeB,
-        data: eventDataB,
-      })
+      expect(events).to.have.length(2)
+      expect(events[0]).to.have.fields({streamId: 0, streamOffset: 1, time: TIME_PATTERN})
+      expect(events[0].event).to.deep.equal(eventB)
+      expect(events[1]).to.have.fields({streamId: 0, streamOffset: 2, time: TIME_PATTERN})
+      expect(events[1].event).to.deep.equal(eventC)
     })
 
-    it('should return an empty result for positive offsets that do not exist', async function () {
-      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA, 111))
+    it('should return the correct events for positive start and end offsets that exist', async function () {
+      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA, 1, 2))
+
+      expect(events).to.have.length(1)
+      expect(events[0]).to.have.fields({streamId: 0, streamOffset: 1, time: TIME_PATTERN})
+      expect(events[0].event).to.deep.equal(eventB)
+    })
+
+    it('should return an empty result for positive start offsets that do not exist', async function () {
+      const [events] =
+        await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA, 111))
+
+      expect(events).to.have.length(0)
+    })
+
+    it('should return an empty result for positive start and end offsets that do not exist', async function () {
+      const [events] =
+        await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA, 111, 222))
 
       expect(events).to.have.length(0)
     })
@@ -118,8 +141,8 @@ describe('readEventsByStream()', pgSpec(function () {
       const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA))
 
       expect(events).to.have.length(2)
-      expect(events[0].event).to.have.fields(eventA)
-      expect(events[1].event).to.have.fields(eventB)
+      expect(events[0].event).to.deep.equal(eventA)
+      expect(events[1].event).to.deep.equal(eventB)
     })
   })
 }))
