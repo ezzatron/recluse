@@ -80,11 +80,11 @@ function normalizeProcess (process) {
 
 function normalizeProjection (projection) {
   const {
-    apply = noop,
+    applyEvent = noop,
   } = projection
 
   return {
-    apply,
+    applyEvent,
   }
 }
 

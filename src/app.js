@@ -92,8 +92,8 @@ function createRun (spec) {
       for await (const result of thread) {
         logger.debug(
           typeof result === 'undefined'
-            ? logger.debug(`Iterated ${type}`)
-            : logger.debug(`Iterated ${type}: ${JSON.stringify(result)}`)
+            ? `Iterated ${type}`
+            : `Iterated ${type}: ${JSON.stringify(result)}`
         )
       }
     })

@@ -27,19 +27,19 @@ async function handleCommand (scope) {
 }
 
 async function deposit (scope) {
-  const {command: {accountId, amount, transactionId}, recordEvents} = scope
+  const {command: {data: {accountId, amount, transactionId}}, recordEvents} = scope
 
   await recordEvents({type: DEPOSIT_STARTED, data: {accountId, amount, transactionId}})
 }
 
 async function transfer (scope) {
-  const {command: {accountId, amount, transactionId}, recordEvents} = scope
+  const {command: {data: {accountId, amount, transactionId}}, recordEvents} = scope
 
   await recordEvents({type: TRANSFER_STARTED, data: {accountId, amount, transactionId}})
 }
 
 async function withdraw (scope) {
-  const {command: {amount, fromAccountId, toAccountId, transactionId}, recordEvents} = scope
+  const {command: {data: {amount, fromAccountId, toAccountId, transactionId}}, recordEvents} = scope
 
   await recordEvents({type: WITHDRAWAL_STARTED, data: {amount, fromAccountId, toAccountId, transactionId}})
 }

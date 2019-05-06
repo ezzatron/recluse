@@ -39,25 +39,25 @@ async function handleCommand (scope) {
 }
 
 async function open (scope) {
-  const {command: {accountId, name}, recordEvents} = scope
+  const {command: {data: {accountId, name}}, recordEvents} = scope
 
   await recordEvents({type: ACCOUNT_OPENED, data: {accountId, name}})
 }
 
 async function creditForDeposit (scope) {
-  const {command: {accountId, amount, transactionId}, recordEvents} = scope
+  const {command: {data: {accountId, amount, transactionId}}, recordEvents} = scope
 
   await recordEvents({type: ACCOUNT_CREDITED_FOR_DEPOSIT, data: {accountId, amount, transactionId}})
 }
 
 async function creditForTransfer (scope) {
-  const {command: {accountId, amount, transactionId}, recordEvents} = scope
+  const {command: {data: {accountId, amount, transactionId}}, recordEvents} = scope
 
   await recordEvents({type: ACCOUNT_CREDITED_FOR_TRANSFER, data: {accountId, amount, transactionId}})
 }
 
 async function debitForWithdrawal (scope) {
-  const {command: {accountId, amount, transactionId}, readState, recordEvents} = scope
+  const {command: {data: {accountId, amount, transactionId}}, readState, recordEvents} = scope
   const balance = await readState()
 
   if (balance >= amount) {
@@ -68,7 +68,7 @@ async function debitForWithdrawal (scope) {
 }
 
 async function debitForTransfer (scope) {
-  const {command: {accountId, amount, transactionId}, readState, recordEvents} = scope
+  const {command: {data: {accountId, amount, transactionId}}, readState, recordEvents} = scope
   const balance = await readState()
 
   if (balance >= amount) {
