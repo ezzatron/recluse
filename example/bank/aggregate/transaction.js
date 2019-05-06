@@ -16,7 +16,7 @@ function routeCommand (command) {
   return transactionId
 }
 
-function handleCommand (scope) {
+async function handleCommand (scope) {
   const {command: {type}} = scope
 
   switch (type) {
@@ -26,22 +26,22 @@ function handleCommand (scope) {
   }
 }
 
-function deposit (scope) {
+async function deposit (scope) {
   const {command: {accountId, amount, transactionId}, recordEvents} = scope
 
-  recordEvents({type: DEPOSIT_STARTED, data: {accountId, amount, transactionId}})
+  await recordEvents({type: DEPOSIT_STARTED, data: {accountId, amount, transactionId}})
 }
 
-function transfer (scope) {
+async function transfer (scope) {
   const {command: {accountId, amount, transactionId}, recordEvents} = scope
 
-  recordEvents({type: TRANSFER_STARTED, data: {accountId, amount, transactionId}})
+  await recordEvents({type: TRANSFER_STARTED, data: {accountId, amount, transactionId}})
 }
 
-function withdraw (scope) {
+async function withdraw (scope) {
   const {command: {amount, fromAccountId, toAccountId, transactionId}, recordEvents} = scope
 
-  recordEvents({type: WITHDRAWAL_STARTED, data: {amount, fromAccountId, toAccountId, transactionId}})
+  await recordEvents({type: WITHDRAWAL_STARTED, data: {amount, fromAccountId, toAccountId, transactionId}})
 }
 
 module.exports = {

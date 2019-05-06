@@ -26,15 +26,15 @@ async function handleEvent (scope) {
 async function debit (scope) {
   const {event: {data: {amount, fromAccountId, toAccountId, transactionId}}, executeCommands, updateState} = scope
 
-  await updateState(() => toAccountId)
+  await updateState(toAccountId)
   executeCommands({type: DEBIT_ACCOUNT_FOR_TRANSFER, data: {accountId: fromAccountId, amount, transactionId}})
 }
 
 async function credit (scope) {
   const {event: {data: {amount, transactionId}}, executeCommands, readState} = scope
-  const toAccountId = await readState()
+  const accountId = await readState()
 
-  executeCommands({type: CREDIT_ACCOUNT_FOR_TRANSFER, data: {accountId: toAccountId, amount, transactionId}})
+  executeCommands({type: CREDIT_ACCOUNT_FOR_TRANSFER, data: {accountId, amount, transactionId}})
 }
 
 module.exports = {

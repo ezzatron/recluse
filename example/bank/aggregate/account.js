@@ -38,22 +38,22 @@ async function handleCommand (scope) {
   }
 }
 
-function open (scope) {
+async function open (scope) {
   const {command: {accountId, name}, recordEvents} = scope
 
-  recordEvents({type: ACCOUNT_OPENED, data: {accountId, name}})
+  await recordEvents({type: ACCOUNT_OPENED, data: {accountId, name}})
 }
 
-function creditForDeposit (scope) {
+async function creditForDeposit (scope) {
   const {command: {accountId, amount, transactionId}, recordEvents} = scope
 
-  recordEvents({type: ACCOUNT_CREDITED_FOR_DEPOSIT, data: {accountId, amount, transactionId}})
+  await recordEvents({type: ACCOUNT_CREDITED_FOR_DEPOSIT, data: {accountId, amount, transactionId}})
 }
 
-function creditForTransfer (scope) {
+async function creditForTransfer (scope) {
   const {command: {accountId, amount, transactionId}, recordEvents} = scope
 
-  recordEvents({type: ACCOUNT_CREDITED_FOR_TRANSFER, data: {accountId, amount, transactionId}})
+  await recordEvents({type: ACCOUNT_CREDITED_FOR_TRANSFER, data: {accountId, amount, transactionId}})
 }
 
 async function debitForWithdrawal (scope) {
@@ -61,9 +61,9 @@ async function debitForWithdrawal (scope) {
   const balance = await readState()
 
   if (balance >= amount) {
-    recordEvents({type: ACCOUNT_DEBITED_FOR_WITHDRAWAL, data: {accountId, amount, transactionId}})
+    await recordEvents({type: ACCOUNT_DEBITED_FOR_WITHDRAWAL, data: {accountId, amount, transactionId}})
   } else {
-    recordEvents({type: WITHDRAWAL_DECLINED_DUE_TO_INSUFFICIENT_FUNDS, data: {accountId, amount, transactionId}})
+    await recordEvents({type: WITHDRAWAL_DECLINED_DUE_TO_INSUFFICIENT_FUNDS, data: {accountId, amount, transactionId}})
   }
 }
 
@@ -72,9 +72,9 @@ async function debitForTransfer (scope) {
   const balance = await readState()
 
   if (balance >= amount) {
-    recordEvents({type: ACCOUNT_DEBITED_FOR_TRANSFER, data: {accountId, amount, transactionId}})
+    await recordEvents({type: ACCOUNT_DEBITED_FOR_TRANSFER, data: {accountId, amount, transactionId}})
   } else {
-    recordEvents({type: TRANSFER_DECLINED_DUE_TO_INSUFFICIENT_FUNDS, data: {accountId, amount, transactionId}})
+    await recordEvents({type: TRANSFER_DECLINED_DUE_TO_INSUFFICIENT_FUNDS, data: {accountId, amount, transactionId}})
   }
 }
 
