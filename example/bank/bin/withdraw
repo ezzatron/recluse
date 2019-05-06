@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+
+const uuidv4 = require('uuid')
+
+const {accountIdByName, die, executeCommands, runAsync, withClient} = require('./util.js')
+const {WITHDRAW} = require('../src/command.js')
+
+runAsync(withClient(async pgClient => {
+  const [,, accountName, amountString] = process.argv
+  const amount = parseInt(amountString)
+
+  if (!accountName || !amount) die('Usage: withdraw <account-name> <cents>')
+
+  const accountId = await accountIdByName(pgClient, accountName)
+
+  if (!accountId) die(`Unknown account ${JSON.stringify(accountName)}`)
+
+  const transactionId = uuidv4()
+  await executeCommands(pgClient, {type: WITHDRAW, data: {accountId, amount, transactionId}})
+}))

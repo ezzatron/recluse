@@ -33,15 +33,15 @@ async function deposit (scope) {
 }
 
 async function transfer (scope) {
-  const {command: {data: {accountId, amount, transactionId}}, recordEvents} = scope
+  const {command: {data: {amount, fromAccountId, toAccountId, transactionId}}, recordEvents} = scope
 
-  await recordEvents({type: TRANSFER_STARTED, data: {accountId, amount, transactionId}})
+  await recordEvents({type: TRANSFER_STARTED, data: {amount, fromAccountId, toAccountId, transactionId}})
 }
 
 async function withdraw (scope) {
-  const {command: {data: {amount, fromAccountId, toAccountId, transactionId}}, recordEvents} = scope
+  const {command: {data: {accountId, amount, transactionId}}, recordEvents} = scope
 
-  await recordEvents({type: WITHDRAWAL_STARTED, data: {amount, fromAccountId, toAccountId, transactionId}})
+  await recordEvents({type: WITHDRAWAL_STARTED, data: {accountId, amount, transactionId}})
 }
 
 module.exports = {
