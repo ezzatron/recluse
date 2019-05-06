@@ -137,18 +137,16 @@ async function updateTransaction (pgClient, previousStatus, status, type, transa
   const [fromAccountId, fromDeltas] = from || []
   const [toAccountId, toDeltas] = to || []
 
-  const result = await pgClient.query(
+  if (from) await updateAccount(pgClient, fromAccountId, fromDeltas)
+  if (to) await updateAccount(pgClient, toAccountId, toDeltas)
+
+  await pgClient.query(
     `
     INSERT INTO bank.transaction AS t (status, type, id, from_id, to_id, amount) VALUES ($2, $3, $4, $5, $6, $7)
     ON CONFLICT (id) DO UPDATE SET status = $2 WHERE t.status = $1
     `,
     [previousStatus, status, type, transactionId, fromAccountId, toAccountId, amount]
   )
-
-  if (result.rowCount < 1) return
-
-  if (from) await updateAccount(pgClient, fromAccountId, fromDeltas)
-  if (to) await updateAccount(pgClient, toAccountId, toDeltas)
 }
 
 async function updateAccount (pgClient, accountId, deltas) {
