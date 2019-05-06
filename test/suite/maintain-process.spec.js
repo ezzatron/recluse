@@ -66,11 +66,12 @@ describe('maintainProcess()', pgSpec(function () {
         eventTypes: [eventTypeA, eventTypeB],
         commandTypes: [commandTypeA],
         createInitialState: () => 0,
-        handleEvent: async ({event: {data}, executeCommands, replaceState, state}) => {
-          const total = state + data
+        handleEvent: async ({event: {data}, executeCommands, readState, updateState}) => {
+          const previousTotal = await readState()
+          const total = previousTotal + data
 
           executeCommands({type: commandTypeA, data: {total, number: data}})
-          replaceState(total)
+          updateState(total)
         },
       }
       await consumeAsyncIterable(
@@ -86,7 +87,7 @@ describe('maintainProcess()', pgSpec(function () {
       expect(commands[1].command).to.deep.equal({type: commandTypeA, data: {total: 333, number: 222}})
     })
 
-    it('should update the state only when replaceState() is called', async function () {
+    it('should update the state only when updateState() is called', async function () {
       await appendEvents(serialization, this.pgClient, streamTypeA, streamInstanceA, 2, [eventC])
 
       const process = {
@@ -94,13 +95,14 @@ describe('maintainProcess()', pgSpec(function () {
         eventTypes: [eventTypeA, eventTypeB],
         commandTypes: [commandTypeA],
         createInitialState: () => ({total: 0}),
-        handleEvent: async ({event: {data, type}, executeCommands, replaceState, state}) => {
+        handleEvent: async ({event: {data, type}, executeCommands, readState, updateState}) => {
+          const state = await readState()
           const total = state.total + data
 
           executeCommands({type: commandTypeA, data: {total, number: data}})
 
           if (type === eventTypeA) {
-            replaceState({total})
+            updateState({total})
           } else {
             state.total = total
           }

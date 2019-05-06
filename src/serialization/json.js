@@ -1,8 +1,13 @@
 module.exports = {
   serialization: {
+    copy,
     serialize,
     unserialize,
   },
+}
+
+function copy (data) {
+  return JSON.parse(JSON.stringify(data))
 }
 
 function serialize (data) {
