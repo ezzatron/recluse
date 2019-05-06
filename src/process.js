@@ -13,7 +13,7 @@ function maintainProcess (serialization, pgPool, name, process, options = {}) {
   const {commandTypes, createInitialState, eventTypes, handleEvent, routeEvent} = process
   const {timeout, clock} = options
 
-  async function apply (pgClient, event) {
+  async function applyEvent (pgClient, event) {
     if (!eventTypes.includes(event.type)) return false
 
     const instance = routeEvent(event)
@@ -50,7 +50,7 @@ function maintainProcess (serialization, pgPool, name, process, options = {}) {
     return true
   }
 
-  return maintainProjection(serialization, pgPool, processType, apply, {timeout, clock})
+  return maintainProjection(serialization, pgPool, processType, {applyEvent}, {clock, timeout, type: processType})
 }
 
 async function readProcessState (serialization, pgClient, name, processType, instance, createInitialState) {

@@ -8,9 +8,9 @@ module.exports = {
   maintainProjection,
 }
 
-function maintainProjection (serialization, pgPool, name, applyEvent, options = {}) {
-  const {timeout, type = `projection.${name}`, clock} = options
-  const iterator = createProjectionIterator(serialization, pgPool, type, applyEvent, timeout, clock)
+function maintainProjection (serialization, pgPool, name, projection, options = {}) {
+  const {clock, timeout, type = `projection.${name}`} = options
+  const iterator = createProjectionIterator(serialization, pgPool, type, projection, timeout, clock)
 
   return {
     [Symbol.asyncIterator]: () => iterator,
@@ -18,7 +18,8 @@ function maintainProjection (serialization, pgPool, name, applyEvent, options = 
   }
 }
 
-function createProjectionIterator (serialization, pgPool, type, applyEvent, timeout, clock) {
+function createProjectionIterator (serialization, pgPool, type, projection, timeout, clock) {
+  const {applyEvent} = projection
   let id, start, iterator, pgClient
   let isLocked = false
 

@@ -1,6 +1,8 @@
+const {createCommandHandler, maintainCommandHandler} = require('./command-handler.js')
 const {createLogger} = require('./logging.js')
 const {createPool} = require('./pg.js')
 const {initializeSchema} = require('./schema.js')
+const {maintainProcess} = require('./process.js')
 const {maintainProjection} = require('./projection.js')
 const {normalizeSpec} = require('./spec.js')
 const {serialization: jsonSerialization} = require('./serialization/json.js')
@@ -21,7 +23,14 @@ function createApp (spec) {
 }
 
 function createRun (spec) {
-  const {initialize, name, projections} = spec
+  const {
+    aggregates,
+    initialize,
+    integrations,
+    name,
+    processes,
+    projections,
+  } = spec
 
   return async function run (options = {}) {
     const {env = process.env} = options
@@ -45,16 +54,35 @@ function createRun (spec) {
       pgClient.release()
     }
 
-    const projectionThreads = Object.entries(projections).map(([name, projection]) => {
-      const {applyEvent} = projection
+    const maintainOptions = {clock}
 
+    const commandHandlerThread = [
+      'command-handler',
+      maintainCommandHandler(
+        serialization,
+        pgPool,
+        createCommandHandler(serialization, aggregates, integrations),
+        maintainOptions
+      ),
+    ]
+
+    const processThreads = Object.entries(processes).map(([name, process]) => {
+      return [
+        `process.${name}`,
+        maintainProcess(serialization, pgPool, name, process, maintainOptions),
+      ]
+    })
+
+    const projectionThreads = Object.entries(projections).map(([name, projection]) => {
       return [
         `projection.${name}`,
-        maintainProjection(serialization, pgPool, name, applyEvent, {clock}),
+        maintainProjection(serialization, pgPool, name, projection, maintainOptions),
       ]
     })
 
     const threads = [
+      commandHandlerThread,
+      ...processThreads,
       ...projectionThreads,
     ]
 
