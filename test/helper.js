@@ -9,10 +9,7 @@ const TIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d+\+00$/
 module.exports = {
   asyncIterableToArray,
   consumeAsyncIterable,
-  jsonBuffer,
-  parseJsonBuffer,
   pgSpec,
-  resolveOnCallback,
 
   TIME_PATTERN,
 }
@@ -87,13 +84,6 @@ function createPool (database) {
   return new Pool({...connectOptions, database})
 }
 
-function resolveOnCallback () {
-  let resolver
-  const promise = new Promise(resolve => { resolver = resolve })
-
-  return [promise, resolver]
-}
-
 async function asyncIterableToArray (iterable) {
   if (iterable == null) throw new Error('Not an object')
 
@@ -137,12 +127,4 @@ async function consumeAsyncIterable (iterable, count, onDone, onIteration) {
   }
 
   if (onDone) await onDone(iterable)
-}
-
-function jsonBuffer (data) {
-  return Buffer.from(JSON.stringify(data))
-}
-
-function parseJsonBuffer (data) {
-  return JSON.parse(data.toString())
 }
