@@ -1,5 +1,5 @@
 const Cursor = require('pg-cursor')
-const {types} = require('pg')
+const {Pool, types} = require('pg')
 
 const {acquireAsyncIterator} = require('./iterator.js')
 const {allSerial} = require('./async.js')
@@ -12,6 +12,7 @@ module.exports = {
   asyncQuery,
   configure,
   continuousQuery,
+  createPool,
   inTransaction,
   releaseSessionLock,
   waitForNotification,
@@ -60,6 +61,10 @@ function continuousQuery (pgClient, text, channel, nextOffset, options = {}) {
     [Symbol.asyncIterator]: () => iterator,
     cancel: iterator.cancel,
   }
+}
+
+function createPool (config = {}) {
+  return new Pool(config)
 }
 
 async function inTransaction (pgClient, fn) {
@@ -161,8 +166,11 @@ function createContinuousQueryIterator (
         }
 
         if (!iterator) {
-          // if this rejects, we just attempt another query anyway
-          nextNotification = waitForNotification(pgClient, channel).catch(() => {})
+          if (!nextNotification) {
+            nextNotification = waitForNotification(pgClient, channel)
+              .then(() => { nextNotification = null })
+              .catch(() => {}) // if this rejects, we just attempt another query anyway
+          }
 
           iterator = acquireAsyncIterator(pgClient.query(asyncQuery(text, [next, ...extraValues], marshal)))
         }

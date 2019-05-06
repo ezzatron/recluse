@@ -1,0 +1,32 @@
+#!/usr/bin/env node
+
+const {Client} = require('pg')
+
+async function main () {
+  const {PGHOST, PGPORT, PGUSER, PGDATABASE} = process.env
+
+  if (!PGDATABASE) throw new Error('No envvars set')
+
+  console.log(`Dropping ${PGDATABASE}`)
+
+  const client = new Client({
+    host: PGHOST,
+    port: parseInt(PGPORT),
+    user: PGUSER,
+    database: 'postgres',
+  })
+
+  await client.connect()
+
+  try {
+    await client.query(`DROP DATABASE ${PGDATABASE}`)
+  } finally {
+    await client.end()
+  }
+}
+
+main().catch(error => {
+  console.error(error.stack)
+
+  process.exit(1)
+})

@@ -1,0 +1,8 @@
+#!/usr/bin/env node
+
+const {createApp} = require('../../../src/app.js')
+const spec = require('../src/index.js')
+
+createApp(spec)
+  .run()
+  .catch(error => console.error(error.stack))

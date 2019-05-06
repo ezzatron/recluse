@@ -6,10 +6,10 @@ module.exports = {
 
 function normalizeSpec (spec) {
   const {
-    name,
-
     aggregates = {},
+    initialize = noop,
     integrations = {},
+    name,
     processes = {},
     projections = {},
   } = spec
@@ -17,10 +17,10 @@ function normalizeSpec (spec) {
   if (!name) throw new Error('Invalid app name')
 
   return {
-    name,
-
     aggregates: mapObjectValues(normalizeAggregate, aggregates),
+    initialize,
     integrations: mapObjectValues(normalizeIntegration, integrations),
+    name,
     processes: mapObjectValues(normalizeProcess, processes),
     projections: mapObjectValues(normalizeProjection, projections),
   }
@@ -28,21 +28,21 @@ function normalizeSpec (spec) {
 
 function normalizeAggregate (aggregate) {
   const {
-    commandTypes = [],
-    eventTypes = [],
-    routeCommand = noop,
-    createInitialState = noop,
-    handleCommand = noop,
     applyEvent = noop,
+    commandTypes = [],
+    createInitialState = noop,
+    eventTypes = [],
+    handleCommand = noop,
+    routeCommand = noop,
   } = aggregate
 
   return {
-    commandTypes,
-    eventTypes,
-    routeCommand,
-    createInitialState,
-    handleCommand,
     applyEvent,
+    commandTypes,
+    createInitialState,
+    eventTypes,
+    handleCommand,
+    routeCommand,
   }
 }
 
@@ -62,19 +62,19 @@ function normalizeIntegration (integration) {
 
 function normalizeProcess (process) {
   const {
-    eventTypes = [],
     commandTypes = [],
-    routeEvent = noop,
     createInitialState = noop,
+    eventTypes = [],
     handleEvent = noop,
+    routeEvent = noop,
   } = process
 
   return {
-    eventTypes,
     commandTypes,
-    routeEvent,
     createInitialState,
+    eventTypes,
     handleEvent,
+    routeEvent,
   }
 }
 

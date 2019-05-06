@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -e
+
+docker rm --force --volumes recluse-postgres-example-bank || true
+docker pull postgres:alpine
+
+docker run --detach --name recluse-postgres-example-bank \
+  --publish 5432 \
+  --env POSTGRES_PASSWORD= \
+  postgres:alpine
