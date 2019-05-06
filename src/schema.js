@@ -3,9 +3,7 @@ module.exports = {
 }
 
 async function initializeSchema (pgClient) {
-  await pgClient.query(`
-    CREATE SCHEMA IF NOT EXISTS recluse
-  `)
+  await pgClient.query(`CREATE SCHEMA IF NOT EXISTS recluse`)
 
   await pgClient.query(`
     CREATE TABLE IF NOT EXISTS recluse.global_offset
@@ -18,10 +16,7 @@ async function initializeSchema (pgClient) {
     )
   `)
 
-  await pgClient.query(`
-    CREATE SEQUENCE IF NOT EXISTS recluse.stream_id_seq AS bigint MINVALUE 0
-  `)
-
+  await pgClient.query(`CREATE SEQUENCE IF NOT EXISTS recluse.stream_id_seq AS bigint MINVALUE 0`)
   await pgClient.query(`
     CREATE TABLE IF NOT EXISTS recluse.stream
     (
@@ -34,14 +29,8 @@ async function initializeSchema (pgClient) {
       UNIQUE (type, instance)
     )
   `)
-
-  await pgClient.query(`
-    ALTER SEQUENCE recluse.stream_id_seq OWNED BY recluse.stream.id
-  `)
-
-  await pgClient.query(`
-    CREATE INDEX IF NOT EXISTS idx_stream_type ON recluse.stream (type)
-  `)
+  await pgClient.query(`ALTER SEQUENCE recluse.stream_id_seq OWNED BY recluse.stream.id`)
+  await pgClient.query(`CREATE INDEX IF NOT EXISTS idx_stream_type ON recluse.stream (type)`)
 
   await pgClient.query(`
     CREATE TABLE IF NOT EXISTS recluse.event
@@ -59,10 +48,7 @@ async function initializeSchema (pgClient) {
     )
   `)
 
-  await pgClient.query(`
-    CREATE SEQUENCE IF NOT EXISTS recluse.command_id_seq AS bigint MINVALUE 0
-  `)
-
+  await pgClient.query(`CREATE SEQUENCE IF NOT EXISTS recluse.command_id_seq AS bigint MINVALUE 0`)
   await pgClient.query(`
     CREATE TABLE IF NOT EXISTS recluse.command
     (
@@ -76,15 +62,9 @@ async function initializeSchema (pgClient) {
       PRIMARY KEY (id)
     )
   `)
+  await pgClient.query(`ALTER SEQUENCE recluse.command_id_seq OWNED BY recluse.command.id`)
 
-  await pgClient.query(`
-    ALTER SEQUENCE recluse.command_id_seq OWNED BY recluse.command.id
-  `)
-
-  await pgClient.query(`
-    CREATE SEQUENCE IF NOT EXISTS recluse.projection_id_seq AS bigint MINVALUE 0
-  `)
-
+  await pgClient.query(`CREATE SEQUENCE IF NOT EXISTS recluse.projection_id_seq AS bigint MINVALUE 0`)
   await pgClient.query(`
     CREATE TABLE IF NOT EXISTS recluse.projection
     (
@@ -96,10 +76,7 @@ async function initializeSchema (pgClient) {
       UNIQUE (type)
     )
   `)
-
-  await pgClient.query(`
-    ALTER SEQUENCE recluse.projection_id_seq OWNED BY recluse.projection.id
-  `)
+  await pgClient.query(`ALTER SEQUENCE recluse.projection_id_seq OWNED BY recluse.projection.id`)
 
   await pgClient.query(`
     CREATE TABLE IF NOT EXISTS recluse.process
