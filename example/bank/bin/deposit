@@ -9,7 +9,7 @@ runAsync(withClient(async pgClient => {
   const [,, accountName, amountString] = process.argv
   const amount = parseInt(amountString)
 
-  if (!accountName || !amount) die('Usage: deposit <account-name> <cents>')
+  if (!accountName || !amount) die('Usage: deposit <account> <cents>')
 
   const accountId = await accountIdByName(pgClient, accountName)
 

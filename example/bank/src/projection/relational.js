@@ -109,10 +109,16 @@ async function createTransfer (pgClient, data) {
 }
 
 async function declineTransfer (pgClient, data) {
-  const {amount, fromAccountId, toAccountId, transactionId} = data
+  const {accountId: fromAccountId, amount, transactionId} = data
 
   const fromDeltas = {pendingBalance: amount}
   const toDeltas = {pendingBalance: -amount}
+
+  const result = await pgClient.query('SELECT to_id FROM bank.transaction WHERE id = $1', [transactionId])
+
+  if (result.rowCount < 1) throw new Error('Unable to correlate transfer for declining')
+
+  const {to_id: toAccountId} = result.rows[0]
 
   const from = [fromAccountId, fromDeltas]
   const to = [toAccountId, toDeltas]
@@ -121,10 +127,16 @@ async function declineTransfer (pgClient, data) {
 }
 
 async function completeTransfer (pgClient, data) {
-  const {amount, fromAccountId, toAccountId, transactionId} = data
+  const {accountId: toAccountId, amount, transactionId} = data
 
   const fromDeltas = {balance: -amount, transfersOut: amount}
   const toDeltas = {balance: amount, transfersIn: amount}
+
+  const result = await pgClient.query('SELECT from_id FROM bank.transaction WHERE id = $1', [transactionId])
+
+  if (result.rowCount < 1) throw new Error('Unable to correlate transfer for completion')
+
+  const {from_id: fromAccountId} = result.rows[0]
 
   const from = [fromAccountId, fromDeltas]
   const to = [toAccountId, toDeltas]

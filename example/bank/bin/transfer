@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+
+const uuidv4 = require('uuid')
+
+const {accountIdByName, die, executeCommands, runAsync, withClient} = require('./util.js')
+const {TRANSFER} = require('../src/command.js')
+
+runAsync(withClient(async pgClient => {
+  const [,, fromAccountName, toAccountName, amountString] = process.argv
+  const amount = parseInt(amountString)
+
+  if (!fromAccountName || !toAccountName || !amount) die('Usage: transfer <from-account> <to-account> <cents>')
+
+  const fromAccountId = await accountIdByName(pgClient, fromAccountName)
+
+  if (!fromAccountId) die(`Unknown account ${JSON.stringify(fromAccountName)}`)
+
+  const toAccountId = await accountIdByName(pgClient, toAccountName)
+
+  if (!toAccountId) die(`Unknown account ${JSON.stringify(toAccountName)}`)
+
+  const transactionId = uuidv4()
+  await executeCommands(pgClient, {type: TRANSFER, data: {amount, fromAccountId, toAccountId, transactionId}})
+}))

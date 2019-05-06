@@ -16,5 +16,4 @@ runAsync(withClient(async pgClient => {
 
   const accountId = uuidv4()
   await executeCommands(pgClient, {type: OPEN_ACCOUNT, data: {accountId, name}})
-  console.log(accountId)
 }))
