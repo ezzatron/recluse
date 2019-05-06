@@ -128,12 +128,11 @@ async function readNextStreamOffset (pgClient, type, instance) {
 }
 
 async function insertEvent (serialize, pgClient, offset, streamId, streamOffset, event) {
-  const {type, data = null} = event
-  const serializedData = data === null ? null : serialize(data, EVENT, type)
+  const {type, data} = event
 
   await pgClient.query(
     'INSERT INTO recluse.event (global_offset, type, stream_id, stream_offset, data) VALUES ($1, $2, $3, $4, $5)',
-    [offset, type, streamId, streamOffset, serializedData]
+    [offset, type, streamId, streamOffset, serialize(data, EVENT, type)]
   )
 }
 
@@ -201,7 +200,7 @@ function marshal (unserialize, row) {
   } = row
 
   const event = {type}
-  if (data !== null) createLazyGetter(event, 'data', () => unserialize(data, EVENT, type))
+  createLazyGetter(event, 'data', () => unserialize(data, EVENT, type))
 
   return {
     event,

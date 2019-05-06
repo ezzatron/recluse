@@ -46,12 +46,11 @@ async function executeCommands (serialization, pgClient, source, commands) {
   const {serialize} = serialization
 
   for (const command of commands) {
-    const {type, data = null} = command
-    const serializedData = data === null ? null : serialize(data, COMMAND, type)
+    const {type, data} = command
 
     await pgClient.query(
       'INSERT INTO recluse.command (source, type, data) VALUES ($1, $2, $3)',
-      [source, type, serializedData]
+      [source, type, serialize(data, COMMAND, type)]
     )
   }
 
@@ -273,7 +272,7 @@ function marshal (unserialize, row) {
   } = row
 
   const command = {type}
-  if (data !== null) createLazyGetter(command, 'data', () => unserialize(data, COMMAND, type))
+  createLazyGetter(command, 'data', () => unserialize(data, COMMAND, type))
 
   return {
     command,

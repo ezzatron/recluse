@@ -45,8 +45,7 @@ describe('appendEvents()', pgSpec(function () {
 
       expect(wasAppended).to.be.true()
       expect(events).to.have.length(1)
-      expect(events[0].event).to.deep.equal({type: eventTypeA})
-      expect(events[0].event.data).to.be.undefined()
+      expect(events[0].event).to.deep.equal({type: eventTypeA, data: null})
     })
 
     it('should be able to append events with undefined data', async function () {
@@ -57,8 +56,7 @@ describe('appendEvents()', pgSpec(function () {
 
       expect(wasAppended).to.be.true()
       expect(events).to.have.length(1)
-      expect(events[0].event).to.deep.equal({type: eventTypeA})
-      expect(events[0].event.data).to.be.undefined()
+      expect(events[0].event).to.deep.equal({type: eventTypeA, data: undefined})
     })
   })
 

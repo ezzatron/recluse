@@ -37,8 +37,7 @@ describe('executeCommands()', pgSpec(function () {
       const [commands] = await asyncIterableToArray(readCommands(serialization, this.pgClient))
 
       expect(commands).to.have.length(1)
-      expect(commands[0].command).to.deep.equal({type: commandTypeA})
-      expect(commands[0].command.data).to.be.undefined()
+      expect(commands[0].command).to.deep.equal({type: commandTypeA, data: null})
     })
 
     it('should be able to record commands with undefined data', async function () {
@@ -47,8 +46,7 @@ describe('executeCommands()', pgSpec(function () {
       const [commands] = await asyncIterableToArray(readCommands(serialization, this.pgClient))
 
       expect(commands).to.have.length(1)
-      expect(commands[0].command).to.deep.equal({type: commandTypeA})
-      expect(commands[0].command.data).to.be.undefined()
+      expect(commands[0].command).to.deep.equal({type: commandTypeA, data: undefined})
     })
   })
 
