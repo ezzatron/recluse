@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+
+const uuidv4 = require('uuid')
+
+const {OPEN_ACCOUNT} = require('../src/command.js')
+const {accountIdByName, die, executeCommands, runAsync, withClient} = require('./util.js')
+
+runAsync(withClient(async pgClient => {
+  const [,, name] = process.argv
+
+  if (!name) die('Usage: open-account <name>')
+
+  const existingAccountId = await accountIdByName(pgClient, name)
+
+  if (existingAccountId) die(`Account ${JSON.stringify(name)} already exists`)
+
+  const accountId = uuidv4()
+  await executeCommands(pgClient, {type: OPEN_ACCOUNT, data: {accountId, name}})
+  console.log(accountId)
+}))

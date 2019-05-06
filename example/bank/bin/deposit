@@ -3,13 +3,18 @@
 const uuidv4 = require('uuid')
 
 const {DEPOSIT} = require('../src/command.js')
-const {executeCommands} = require('./util.js')
+const {accountIdByName, die, executeCommands, runAsync, withClient} = require('./util.js')
 
-const [,, accountId, amountString] = process.argv
-const amount = parseInt(amountString)
+runAsync(withClient(async pgClient => {
+  const [,, accountName, amountString] = process.argv
+  const amount = parseInt(amountString)
 
-if (!accountId) throw new Error('Invalid account ID')
-if (!amount) throw new Error('Invalid amount')
+  if (!accountName || !amount) die('Usage: deposit <account-name> <cents>')
 
-const transactionId = uuidv4()
-executeCommands({type: DEPOSIT, data: {accountId, amount, transactionId}})
+  const accountId = await accountIdByName(pgClient, accountName)
+
+  if (!accountId) die(`Unknown account ${JSON.stringify(accountName)}`)
+
+  const transactionId = uuidv4()
+  await executeCommands(pgClient, {type: DEPOSIT, data: {accountId, amount, transactionId}})
+}))

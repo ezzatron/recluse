@@ -5,31 +5,45 @@ const {executeCommands: executeCommandsRaw} = require('../../../src/command.js')
 const {serialization} = require('../../../src/serialization/json.js')
 
 module.exports = {
+  accountIdByName,
+  die,
   executeCommands,
+  runAsync,
+  withClient,
 }
 
-function executeCommands (...commands) {
-  async function execute () {
-    const binaryName = basename(process.argv[1])
-    const [,, accountId, amountString] = process.argv
-    const amount = parseInt(amountString)
+async function accountIdByName (pgClient, name) {
+  const result = await pgClient.query('SELECT id FROM bank.account WHERE name = $1', [name])
 
-    if (!accountId) throw new Error('Invalid account ID')
-    if (!amount) throw new Error('Invalid amount')
+  return result.rowCount > 0 ? result.rows[0].id : null
+}
 
-    const pgClient = new Client()
-    await pgClient.connect()
+function die (message) {
+  console.log(message)
 
-    try {
-      await executeCommandsRaw(serialization, pgClient, `cli.${binaryName}`, commands)
-    } finally {
-      await pgClient.end()
-    }
-  }
+  process.exit(1)
+}
 
-  execute().catch(error => {
+async function executeCommands (pgClient, ...commands) {
+  const binaryName = basename(process.argv[1])
+  await executeCommandsRaw(serialization, pgClient, `cli.${binaryName}`, commands)
+}
+
+function runAsync (fn) {
+  fn.catch(error => {
     console.error(error.stack)
 
     process.exit(1)
   })
+}
+
+async function withClient (fn) {
+  const pgClient = new Client()
+  await pgClient.connect()
+
+  try {
+    await fn(pgClient)
+  } finally {
+    await pgClient.end()
+  }
 }

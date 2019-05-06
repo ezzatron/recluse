@@ -2,7 +2,6 @@
 
 const spec = require('../src/index.js')
 const {createApp} = require('../../../src/app.js')
+const {runAsync} = require('./util.js')
 
-createApp(spec)
-  .run()
-  .catch(error => console.error(error.stack))
+runAsync(createApp(spec).run())
