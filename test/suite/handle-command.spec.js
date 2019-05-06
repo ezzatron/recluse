@@ -2,7 +2,7 @@ const {expect} = require('chai')
 
 const {asyncIterableToArray, pgSpec} = require('../helper.js')
 
-const {createCommandHandler} = require('../../src/command.js')
+const {createCommandHandler} = require('../../src/command-handler.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {readEventsByStream} = require('../../src/event.js')
 const {serialization} = require('../../src/serialization/json.js')
