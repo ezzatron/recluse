@@ -1,37 +1,15 @@
 #!/usr/bin/env node
 
 const uuidv4 = require('uuid')
-const {Client} = require('pg')
 
-const spec = require('../src/index.js')
-const {createCommandHandler} = require('../../../src/command-handler.js')
 const {DEPOSIT} = require('../src/command.js')
-const {normalizeSpec} = require('../../../src/spec.js')
-const {serialization} = require('../../../src/serialization/json.js')
+const {executeCommands} = require('./util.js')
 
-async function main () {
-  const [,, accountId, amountString] = process.argv
-  const amount = parseInt(amountString)
+const [,, accountId, amountString] = process.argv
+const amount = parseInt(amountString)
 
-  if (!accountId) throw new Error('Invalid account ID')
-  if (!amount) throw new Error('Invalid amount')
+if (!accountId) throw new Error('Invalid account ID')
+if (!amount) throw new Error('Invalid amount')
 
-  const {aggregates, integrations} = normalizeSpec(spec)
-  const handleCommand = createCommandHandler(serialization, aggregates, integrations)
-  const transactionId = uuidv4()
-
-  const pgClient = new Client()
-  await pgClient.connect()
-
-  try {
-    await handleCommand(pgClient, {type: DEPOSIT, data: {accountId, amount, transactionId}})
-  } finally {
-    await pgClient.end()
-  }
-}
-
-main().catch(error => {
-  console.error(error.stack)
-
-  process.exit(1)
-})
+const transactionId = uuidv4()
+executeCommands({type: DEPOSIT, data: {accountId, amount, transactionId}})
