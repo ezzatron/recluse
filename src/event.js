@@ -1,5 +1,7 @@
 const {asyncQuery, continuousQuery, UNIQUE_VIOLATION} = require('./pg.js')
+const {createLazyGetter} = require('./object.js')
 const {EVENT: CHANNEL} = require('./channel.js')
+const {EVENT} = require('./handler.js')
 
 module.exports = {
   appendEvents,
@@ -10,7 +12,8 @@ module.exports = {
   readNextStreamOffset,
 }
 
-async function appendEvents (pgClient, type, instance, start, events) {
+async function appendEvents (serialization, pgClient, type, instance, start, events) {
+  const {serialize} = serialization
   const count = events.length
   const next = start + count
 
@@ -23,7 +26,7 @@ async function appendEvents (pgClient, type, instance, start, events) {
   const offset = await updateGlobalOffset(pgClient, count)
 
   for (let i = 0; i < count; ++i) {
-    await insertEvent(pgClient, offset + i, streamId, start + i, events[i])
+    await insertEvent(serialize, pgClient, offset + i, streamId, start + i, events[i])
   }
 
   await pgClient.query(`NOTIFY ${CHANNEL}`)
@@ -31,14 +34,15 @@ async function appendEvents (pgClient, type, instance, start, events) {
   return true
 }
 
-async function appendEventsUnchecked (pgClient, type, instance, events) {
+async function appendEventsUnchecked (serialization, pgClient, type, instance, events) {
+  const {serialize} = serialization
   const count = events.length
 
   const [streamId, start] = await updateStreamOffsetUnchecked(pgClient, type, instance, count)
   const offset = await updateGlobalOffset(pgClient, count)
 
   for (let i = 0; i < count; ++i) {
-    await insertEvent(pgClient, offset + i, streamId, start + i, events[i])
+    await insertEvent(serialize, pgClient, offset + i, streamId, start + i, events[i])
   }
 
   await pgClient.query(`NOTIFY ${CHANNEL}`)
@@ -46,7 +50,9 @@ async function appendEventsUnchecked (pgClient, type, instance, events) {
   return true
 }
 
-function readEvents (pgClient, start = 0, end = Infinity) {
+function readEvents (serialization, pgClient, start = 0, end = Infinity) {
+  const {unserialize} = serialization
+
   let text, params
 
   if (isFinite(end)) {
@@ -57,10 +63,10 @@ function readEvents (pgClient, start = 0, end = Infinity) {
     params = [start]
   }
 
-  return pgClient.query(asyncQuery(text, params, marshal))
+  return pgClient.query(asyncQuery(text, params, marshal.bind(null, unserialize)))
 }
 
-function readEventsByStream (pgClient, type, instance, start = 0, end = Infinity) {
+function readEventsByStream (serialization, pgClient, type, instance, start = 0, end = Infinity) {
   if (typeof type !== 'string') throw new Error('Invalid stream type')
   if (typeof instance !== 'string') throw new Error('Invalid stream instance')
 
@@ -84,10 +90,13 @@ function readEventsByStream (pgClient, type, instance, start = 0, end = Infinity
     params = [type, instance, start]
   }
 
-  return pgClient.query(asyncQuery(text, params, marshal))
+  const {unserialize} = serialization
+
+  return pgClient.query(asyncQuery(text, params, marshal.bind(null, unserialize)))
 }
 
-function readEventsContinuously (pgClient, options = {}) {
+function readEventsContinuously (serialization, pgClient, options = {}) {
+  const {unserialize} = serialization
   const {clock, start, timeout} = options
 
   return continuousQuery(
@@ -95,7 +104,12 @@ function readEventsContinuously (pgClient, options = {}) {
     'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
     CHANNEL,
     ({globalOffset}) => globalOffset + 1,
-    {clock, marshal, start, timeout}
+    {
+      clock,
+      marshal: marshal.bind(null, unserialize),
+      start,
+      timeout,
+    }
   )
 }
 
@@ -113,12 +127,13 @@ async function readNextStreamOffset (pgClient, type, instance) {
   return parseInt(result.rows[0].next)
 }
 
-async function insertEvent (pgClient, offset, streamId, streamOffset, event) {
+async function insertEvent (serialize, pgClient, offset, streamId, streamOffset, event) {
   const {type, data = null} = event
+  const serializedData = data === null ? null : serialize(data, EVENT, type)
 
   await pgClient.query(
     'INSERT INTO recluse.event (global_offset, type, stream_id, stream_offset, data) VALUES ($1, $2, $3, $4, $5)',
-    [offset, type, streamId, streamOffset, data]
+    [offset, type, streamId, streamOffset, serializedData]
   )
 }
 
@@ -175,7 +190,7 @@ async function updateGlobalOffset (pgClient, count) {
   return result.rows[0].next - count
 }
 
-function marshal (row) {
+function marshal (unserialize, row) {
   const {
     data,
     global_offset: globalOffset,
@@ -185,8 +200,11 @@ function marshal (row) {
     type,
   } = row
 
+  const event = {type}
+  if (data !== null) createLazyGetter(event, 'data', () => unserialize(data, EVENT, type))
+
   return {
-    event: data === null ? {type} : {type, data},
+    event,
     globalOffset: parseInt(globalOffset),
     streamId: parseInt(streamId),
     streamOffset: parseInt(streamOffset),

@@ -7,6 +7,7 @@ const {createClock} = require('../clock.js')
 const {createCommandHandler, executeCommands, maintainCommandHandler} = require('../../src/command.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {readEvents} = require('../../src/event.js')
+const {serialization} = require('../../src/serialization/json.js')
 const {UNIQUE_VIOLATION} = require('../../src/pg.js')
 
 describe('maintainCommandHandler()', pgSpec(function () {
@@ -15,10 +16,10 @@ describe('maintainCommandHandler()', pgSpec(function () {
   const sourceA = 'command-source-a'
   const commandTypeA = 'command-type-a'
   const commandTypeB = 'command-type-b'
-  const commandA = {type: commandTypeA, data: Buffer.from('a')}
-  const commandB = {type: commandTypeB, data: Buffer.from('b')}
-  const commandC = {type: commandTypeA, data: Buffer.from('c')}
-  const commandD = {type: commandTypeB, data: Buffer.from('d')}
+  const commandA = {type: commandTypeA, data: 'a'}
+  const commandB = {type: commandTypeB, data: 'b'}
+  const commandC = {type: commandTypeA, data: 'c'}
+  const commandD = {type: commandTypeB, data: 'd'}
   const eventTypeA = 'event-type-a'
   const eventTypeB = 'event-type-b'
 
@@ -28,12 +29,13 @@ describe('maintainCommandHandler()', pgSpec(function () {
     await initializeSchema(this.pgClient)
 
     this.handleCommand = createCommandHandler(
+      serialization,
       {
         [nameA]: {
           commandTypes: [commandTypeA, commandTypeB],
           eventTypes: [eventTypeA, eventTypeB],
           routeCommand: () => instanceA,
-          createInitialState: () => {},
+          createInitialState: () => null,
           handleCommand: ({command: {type, data}, recordEvents}) => {
             switch (type) {
               case commandTypeA: return recordEvents({type: eventTypeA, data})
@@ -53,9 +55,9 @@ describe('maintainCommandHandler()', pgSpec(function () {
 
   context('before iteration', function () {
     it('should support cancellation', async function () {
-      await executeCommands(this.pgClient, sourceA, [commandA, commandB])
-      await maintainCommandHandler(this.pgClient, this.handleCommand).cancel()
-      const [events] = await asyncIterableToArray(readEvents(this.pgClient))
+      await executeCommands(serialization, this.pgClient, sourceA, [commandA, commandB])
+      await maintainCommandHandler(serialization, this.pgClient, this.handleCommand).cancel()
+      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
 
       expect(events).to.have.length(0)
     })
@@ -63,20 +65,20 @@ describe('maintainCommandHandler()', pgSpec(function () {
 
   context('while iterating', function () {
     beforeEach(async function () {
-      await executeCommands(this.pgClient, sourceA, [commandA, commandB])
+      await executeCommands(serialization, this.pgClient, sourceA, [commandA, commandB])
     })
 
     it('should handle commands', async function () {
       await consumeAsyncIterable(
-        maintainCommandHandler(this.pgPool, this.handleCommand),
+        maintainCommandHandler(serialization, this.pgPool, this.handleCommand),
         2,
         commands => commands.cancel()
       )
-      const [events] = await asyncIterableToArray(readEvents(this.pgClient))
+      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
 
       expect(events).to.have.length(2)
-      expect(events[0].event).to.have.fields({type: eventTypeA, data: commandA.data})
-      expect(events[1].event).to.have.fields({type: eventTypeB, data: commandB.data})
+      expect(events[0].event).to.deep.equal({type: eventTypeA, data: commandA.data})
+      expect(events[1].event).to.deep.equal({type: eventTypeB, data: commandB.data})
     })
 
     it('should throw if commands cannot be handled', async function () {
@@ -98,7 +100,7 @@ describe('maintainCommandHandler()', pgSpec(function () {
         },
       }
 
-      const commands = maintainCommandHandler(pool, this.handleCommand)
+      const commands = maintainCommandHandler(serialization, pool, this.handleCommand)
 
       await expect(consumeAsyncIterable(commands, 1)).to.be.rejectedWith('Unable to handle command-type-a command')
       expect(releases[1]).to.have.been.called()
@@ -109,20 +111,20 @@ describe('maintainCommandHandler()', pgSpec(function () {
     it('should handle new commands when relying solely on notifications', async function () {
       await Promise.all([
         consumeAsyncIterable(
-          maintainCommandHandler(this.pgPool, this.handleCommand, {timeout: null}),
+          maintainCommandHandler(serialization, this.pgPool, this.handleCommand, {timeout: null}),
           4,
           commands => commands.cancel()
         ),
 
-        executeCommands(this.pgClient, sourceA, [commandC, commandD]),
+        executeCommands(serialization, this.pgClient, sourceA, [commandC, commandD]),
       ])
-      const [events] = await asyncIterableToArray(readEvents(this.pgClient))
+      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
 
       expect(events).to.have.length(4)
-      expect(events[0].event).to.have.fields({type: eventTypeA, data: commandA.data})
-      expect(events[1].event).to.have.fields({type: eventTypeB, data: commandB.data})
-      expect(events[2].event).to.have.fields({type: eventTypeA, data: commandC.data})
-      expect(events[3].event).to.have.fields({type: eventTypeB, data: commandD.data})
+      expect(events[0].event).to.deep.equal({type: eventTypeA, data: commandA.data})
+      expect(events[1].event).to.deep.equal({type: eventTypeB, data: commandB.data})
+      expect(events[2].event).to.deep.equal({type: eventTypeA, data: commandC.data})
+      expect(events[3].event).to.deep.equal({type: eventTypeB, data: commandD.data})
     })
 
     it('should handle new commands when a notification is received before the timeout', async function () {
@@ -130,20 +132,20 @@ describe('maintainCommandHandler()', pgSpec(function () {
 
       await Promise.all([
         consumeAsyncIterable(
-          maintainCommandHandler(this.pgPool, this.handleCommand, {clock}),
+          maintainCommandHandler(serialization, this.pgPool, this.handleCommand, {clock}),
           4,
           commands => commands.cancel()
         ),
 
-        executeCommands(this.pgClient, sourceA, [commandC, commandD]),
+        executeCommands(serialization, this.pgClient, sourceA, [commandC, commandD]),
       ])
-      const [events] = await asyncIterableToArray(readEvents(this.pgClient))
+      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
 
       expect(events).to.have.length(4)
-      expect(events[0].event).to.have.fields({type: eventTypeA, data: commandA.data})
-      expect(events[1].event).to.have.fields({type: eventTypeB, data: commandB.data})
-      expect(events[2].event).to.have.fields({type: eventTypeA, data: commandC.data})
-      expect(events[3].event).to.have.fields({type: eventTypeB, data: commandD.data})
+      expect(events[0].event).to.deep.equal({type: eventTypeA, data: commandA.data})
+      expect(events[1].event).to.deep.equal({type: eventTypeB, data: commandB.data})
+      expect(events[2].event).to.deep.equal({type: eventTypeA, data: commandC.data})
+      expect(events[3].event).to.deep.equal({type: eventTypeB, data: commandD.data})
     })
 
     it('should handle new commands when the timeout fires before receiving a notification', async function () {
@@ -156,28 +158,28 @@ describe('maintainCommandHandler()', pgSpec(function () {
 
       await Promise.all([
         consumeAsyncIterable(
-          maintainCommandHandler(this.pgPool, this.handleCommand, {clock}),
+          maintainCommandHandler(serialization, this.pgPool, this.handleCommand, {clock}),
           4,
           commands => commands.cancel()
         ),
 
-        executeCommands(executeClient, sourceA, [commandC, commandD]),
+        executeCommands(serialization, executeClient, sourceA, [commandC, commandD]),
       ])
-      const [events] = await asyncIterableToArray(readEvents(this.pgClient))
+      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
 
       expect(events).to.have.length(4)
-      expect(events[0].event).to.have.fields({type: eventTypeA, data: commandA.data})
-      expect(events[1].event).to.have.fields({type: eventTypeB, data: commandB.data})
-      expect(events[2].event).to.have.fields({type: eventTypeA, data: commandC.data})
-      expect(events[3].event).to.have.fields({type: eventTypeB, data: commandD.data})
+      expect(events[0].event).to.deep.equal({type: eventTypeA, data: commandA.data})
+      expect(events[1].event).to.deep.equal({type: eventTypeB, data: commandB.data})
+      expect(events[2].event).to.deep.equal({type: eventTypeA, data: commandC.data})
+      expect(events[3].event).to.deep.equal({type: eventTypeB, data: commandD.data})
     })
   })
 
   context('when resuming handling commands after previous handling', function () {
     beforeEach(async function () {
-      await executeCommands(this.pgClient, sourceA, [commandA, commandB])
+      await executeCommands(serialization, this.pgClient, sourceA, [commandA, commandB])
       await consumeAsyncIterable(
-        maintainCommandHandler(this.pgPool, this.handleCommand),
+        maintainCommandHandler(serialization, this.pgPool, this.handleCommand),
         2,
         commands => commands.cancel()
       )
@@ -186,27 +188,27 @@ describe('maintainCommandHandler()', pgSpec(function () {
     it('should handle only unhandled commands', async function () {
       await Promise.all([
         consumeAsyncIterable(
-          maintainCommandHandler(this.pgPool, this.handleCommand, {timeout: null}),
+          maintainCommandHandler(serialization, this.pgPool, this.handleCommand, {timeout: null}),
           2,
           commands => commands.cancel()
         ),
 
-        executeCommands(this.pgClient, sourceA, [commandC, commandD]),
+        executeCommands(serialization, this.pgClient, sourceA, [commandC, commandD]),
       ])
-      const [events] = await asyncIterableToArray(readEvents(this.pgClient))
+      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
 
       expect(events).to.have.length(4)
-      expect(events[0].event).to.have.fields({type: eventTypeA, data: commandA.data})
-      expect(events[1].event).to.have.fields({type: eventTypeB, data: commandB.data})
-      expect(events[2].event).to.have.fields({type: eventTypeA, data: commandC.data})
-      expect(events[3].event).to.have.fields({type: eventTypeB, data: commandD.data})
+      expect(events[0].event).to.deep.equal({type: eventTypeA, data: commandA.data})
+      expect(events[1].event).to.deep.equal({type: eventTypeB, data: commandB.data})
+      expect(events[2].event).to.deep.equal({type: eventTypeA, data: commandC.data})
+      expect(events[3].event).to.deep.equal({type: eventTypeB, data: commandD.data})
     })
   })
 
   context('when multiple workers try handle commands', function () {
     it('should cooperatively handle commands using a single worker at a time', async function () {
       const maintain = () => consumeAsyncIterable(
-        maintainCommandHandler(this.pgPool, this.handleCommand, {timeout: null}),
+        maintainCommandHandler(serialization, this.pgPool, this.handleCommand, {timeout: null}),
         2,
         commands => commands.cancel()
       )
@@ -215,16 +217,16 @@ describe('maintainCommandHandler()', pgSpec(function () {
         maintain(),
         maintain(),
 
-        executeCommands(this.pgClient, sourceA, [commandA, commandB, commandC, commandD]),
+        executeCommands(serialization, this.pgClient, sourceA, [commandA, commandB, commandC, commandD]),
       ])
 
-      const [events] = await asyncIterableToArray(readEvents(this.pgClient))
+      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
 
       expect(events).to.have.length(4)
-      expect(events[0].event).to.have.fields({type: eventTypeA, data: commandA.data})
-      expect(events[1].event).to.have.fields({type: eventTypeB, data: commandB.data})
-      expect(events[2].event).to.have.fields({type: eventTypeA, data: commandC.data})
-      expect(events[3].event).to.have.fields({type: eventTypeB, data: commandD.data})
+      expect(events[0].event).to.deep.equal({type: eventTypeA, data: commandA.data})
+      expect(events[1].event).to.deep.equal({type: eventTypeB, data: commandB.data})
+      expect(events[2].event).to.deep.equal({type: eventTypeA, data: commandC.data})
+      expect(events[3].event).to.deep.equal({type: eventTypeB, data: commandD.data})
     })
   })
 }))

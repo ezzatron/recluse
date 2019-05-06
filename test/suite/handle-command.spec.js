@@ -1,10 +1,11 @@
 const {expect} = require('chai')
 
-const {asyncIterableToArray, jsonBuffer, parseJsonBuffer, pgSpec} = require('../helper.js')
+const {asyncIterableToArray, pgSpec} = require('../helper.js')
 
 const {createCommandHandler} = require('../../src/command.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {readEventsByStream} = require('../../src/event.js')
+const {serialization} = require('../../src/serialization/json.js')
 
 describe('handleCommand()', pgSpec(function () {
   const aggregateNameA = 'aggregate-name-a'
@@ -40,20 +41,27 @@ describe('handleCommand()', pgSpec(function () {
   })
 
   context('when creating', function () {
-    it('should throw when aggregates are not supplied', async function () {
+    it('should throw when the serialization is not supplied', async function () {
       const operation = () => createCommandHandler()
+
+      expect(operation).to.throw('Invalid serialization')
+    })
+
+    it('should throw when aggregates are not supplied', async function () {
+      const operation = () => createCommandHandler(serialization)
 
       expect(operation).to.throw('Invalid aggregates')
     })
 
     it('should throw when integrations are not supplied', async function () {
-      const operation = () => createCommandHandler({})
+      const operation = () => createCommandHandler(serialization, {})
 
       expect(operation).to.throw('Invalid integrations')
     })
 
     it('should throw when multiple aggregates attempt to handle the same command type', async function () {
       const operation = () => createCommandHandler(
+        serialization,
         {
           [aggregateNameA]: {
             ...emptyAggregate,
@@ -73,6 +81,7 @@ describe('handleCommand()', pgSpec(function () {
 
     it('should throw when multiple integrations attempt to handle the same command type', async function () {
       const operation = () => createCommandHandler(
+        serialization,
         {
           [aggregateNameA]: {
             ...emptyAggregate,
@@ -92,6 +101,7 @@ describe('handleCommand()', pgSpec(function () {
 
     it('should throw when aggregates and integrations attempt to handle the same command type', async function () {
       const operation = () => createCommandHandler(
+        serialization,
         {},
         {
           [integrationNameA]: {
@@ -113,6 +123,7 @@ describe('handleCommand()', pgSpec(function () {
   context('when handling commands', function () {
     it('should throw when handling commands with unexpected types', async function () {
       const handleCommand = createCommandHandler(
+        serialization,
         {
           [aggregateNameA]: emptyAggregate,
         },
@@ -130,6 +141,7 @@ describe('handleCommand()', pgSpec(function () {
 
     it('should throw when handling commands that cannot be routed', async function () {
       const handleCommand = createCommandHandler(
+        serialization,
         {
           [aggregateNameA]: {
             ...emptyAggregate,
@@ -153,6 +165,7 @@ describe('handleCommand()', pgSpec(function () {
       const createCommandB = increment => ({type: commandTypeB, data: {increment}})
       const instance = 'aggregate-instance-a'
       const handleCommand = createCommandHandler(
+        serialization,
         {
           [aggregateNameA]: {
             ...emptyAggregate,
@@ -163,14 +176,12 @@ describe('handleCommand()', pgSpec(function () {
 
             handleCommand: ({state: {a, b}, command: {type, data: {increment}}, recordEvents}) => {
               switch (type) {
-                case commandTypeA: return recordEvents({type: eventTypeA, data: jsonBuffer({current: a, increment})})
-                case commandTypeB: return recordEvents({type: eventTypeB, data: jsonBuffer({current: b, increment})})
+                case commandTypeA: return recordEvents({type: eventTypeA, data: {current: a, increment}})
+                case commandTypeB: return recordEvents({type: eventTypeB, data: {current: b, increment}})
               }
             },
 
-            applyEvent: (state, {type, data}) => {
-              const {increment} = parseJsonBuffer(data)
-
+            applyEvent: (state, {type, data: {increment}}) => {
               switch (type) {
                 case eventTypeA: return (state.a += increment)
                 case eventTypeB: return (state.b += increment)
@@ -188,19 +199,21 @@ describe('handleCommand()', pgSpec(function () {
         isHandled.push(await handleCommand(this.pgClient, createCommandB(333)))
       })
 
-      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, aggregateStreamA, instance))
+      const [events] =
+        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instance))
 
       expect(isHandled).to.deep.equal([true, true, true])
       expect(events).to.have.length(3)
-      expect(events[0].event).to.have.fields({type: eventTypeA, data: jsonBuffer({current: 0, increment: 111})})
-      expect(events[1].event).to.have.fields({type: eventTypeA, data: jsonBuffer({current: 111, increment: 222})})
-      expect(events[2].event).to.have.fields({type: eventTypeB, data: jsonBuffer({current: 0, increment: 333})})
+      expect(events[0].event).to.deep.equal({type: eventTypeA, data: {current: 0, increment: 111}})
+      expect(events[1].event).to.deep.equal({type: eventTypeA, data: {current: 111, increment: 222}})
+      expect(events[2].event).to.deep.equal({type: eventTypeB, data: {current: 0, increment: 333}})
     })
 
     it('should immediately apply recorded events to the state', async function () {
       const createCommandA = () => ({type: commandTypeA})
       const instance = 'aggregate-instance-a'
       const handleCommand = createCommandHandler(
+        serialization,
         {
           [aggregateNameA]: {
             ...emptyAggregate,
@@ -210,15 +223,14 @@ describe('handleCommand()', pgSpec(function () {
             createInitialState: () => ({a: 0}),
 
             handleCommand: ({state, recordEvents}) => {
-              recordEvents({type: eventTypeA, data: jsonBuffer({value: state.a + 111})})
+              recordEvents({type: eventTypeA, data: {value: state.a + 111}})
               recordEvents(
-                {type: eventTypeA, data: jsonBuffer({value: state.a + 111})},
-                {type: eventTypeA, data: jsonBuffer({value: state.a + 111})}
+                {type: eventTypeA, data: {value: state.a + 111}},
+                {type: eventTypeA, data: {value: state.a + 111}}
               )
             },
 
-            applyEvent: (state, {data}) => {
-              const {value} = parseJsonBuffer(data)
+            applyEvent: (state, {data: {value}}) => {
               state.a = value
             },
           },
@@ -227,20 +239,22 @@ describe('handleCommand()', pgSpec(function () {
       )
 
       const isHandled = await this.inTransaction(async () => handleCommand(this.pgClient, createCommandA()))
-      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, aggregateStreamA, instance))
+      const [events] =
+        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instance))
 
       expect(isHandled).to.be.true()
       expect(events).to.have.length(3)
-      expect(events[0].event).to.have.fields({data: jsonBuffer({value: 111})})
-      expect(events[1].event).to.have.fields({data: jsonBuffer({value: 222})})
-      expect(events[2].event).to.have.fields({data: jsonBuffer({value: 222})})
+      expect(events[0].event).to.deep.equal({type: eventTypeA, data: {value: 111}})
+      expect(events[1].event).to.deep.equal({type: eventTypeA, data: {value: 222}})
+      expect(events[2].event).to.deep.equal({type: eventTypeA, data: {value: 222}})
     })
 
     it('should not allow failures to affect the state for future calls', async function () {
       const createCommandA = isOkay => ({type: commandTypeA, data: {isOkay}})
       const instance = 'aggregate-instance-a'
-      const notOkay = new Error('Not okay.')
+      const notOkay = new Error('Not okay')
       const handleCommand = createCommandHandler(
+        serialization,
         {
           [aggregateNameA]: {
             ...emptyAggregate,
@@ -250,13 +264,12 @@ describe('handleCommand()', pgSpec(function () {
             createInitialState: () => ({a: 0}),
 
             handleCommand: ({state, command: {data: {isOkay}}, recordEvents}) => {
-              recordEvents({type: eventTypeA, data: jsonBuffer({value: state.a + 111})})
+              recordEvents({type: eventTypeA, data: {value: state.a + 111}})
 
               if (!isOkay) throw notOkay
             },
 
-            applyEvent: (state, {data}) => {
-              const {value} = parseJsonBuffer(data)
+            applyEvent: (state, {data: {value}}) => {
               state.a = value
             },
           },
@@ -273,13 +286,14 @@ describe('handleCommand()', pgSpec(function () {
         error = e
       }
       isHandled.push(await this.inTransaction(async () => handleCommand(this.pgClient, createCommandA(true))))
-      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, aggregateStreamA, instance))
+      const [events] =
+        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instance))
 
       expect(isHandled).to.deep.equal([true, true])
       expect(error).to.equal(notOkay)
       expect(events).to.have.length(2)
-      expect(events[0].event).to.have.fields({data: jsonBuffer({value: 111})})
-      expect(events[1].event).to.have.fields({data: jsonBuffer({value: 222})})
+      expect(events[0].event).to.deep.equal({type: eventTypeA, data: {value: 111}})
+      expect(events[1].event).to.deep.equal({type: eventTypeA, data: {value: 222}})
     })
 
     it('should be able to route to instances on a per-command basis', async function () {
@@ -287,6 +301,7 @@ describe('handleCommand()', pgSpec(function () {
       const instanceA = 'aggregate-instance-a'
       const instanceB = 'aggregate-instance-b'
       const handleCommand = createCommandHandler(
+        serialization,
         {
           [aggregateNameA]: {
             ...emptyAggregate,
@@ -295,12 +310,11 @@ describe('handleCommand()', pgSpec(function () {
             routeCommand: ({data: {instance}}) => instance,
             createInitialState: () => ({a: 0}),
 
-            handleCommand: ({state: {a}, command: {data: {increment}}, recordEvents}) => {
-              recordEvents({type: eventTypeA, data: jsonBuffer({current: a, increment})})
+            handleCommand: ({state, command: {data: {increment}}, recordEvents}) => {
+              recordEvents({type: eventTypeA, data: {current: state.a, increment}})
             },
 
-            applyEvent: (state, {type, data}) => {
-              const {increment} = parseJsonBuffer(data)
+            applyEvent: (state, {data: {increment}}) => {
               state.a += increment
             },
           },
@@ -316,16 +330,18 @@ describe('handleCommand()', pgSpec(function () {
         isHandled.push(await handleCommand(this.pgClient, createCommandA(instanceB, 444)))
       })
 
-      const [eventsA] = await asyncIterableToArray(readEventsByStream(this.pgClient, aggregateStreamA, instanceA))
-      const [eventsB] = await asyncIterableToArray(readEventsByStream(this.pgClient, aggregateStreamA, instanceB))
+      const [eventsA] =
+        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instanceA))
+      const [eventsB] =
+        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instanceB))
 
       expect(isHandled).to.deep.equal([true, true, true, true])
       expect(eventsA).to.have.length(2)
-      expect(eventsA[0].event).to.have.fields({type: eventTypeA, data: jsonBuffer({current: 0, increment: 111})})
-      expect(eventsA[1].event).to.have.fields({type: eventTypeA, data: jsonBuffer({current: 111, increment: 333})})
+      expect(eventsA[0].event).to.deep.equal({type: eventTypeA, data: {current: 0, increment: 111}})
+      expect(eventsA[1].event).to.deep.equal({type: eventTypeA, data: {current: 111, increment: 333}})
       expect(eventsB).to.have.length(2)
-      expect(eventsB[0].event).to.have.fields({type: eventTypeA, data: jsonBuffer({current: 0, increment: 222})})
-      expect(eventsB[1].event).to.have.fields({type: eventTypeA, data: jsonBuffer({current: 222, increment: 444})})
+      expect(eventsB[0].event).to.deep.equal({type: eventTypeA, data: {current: 0, increment: 222}})
+      expect(eventsB[1].event).to.deep.equal({type: eventTypeA, data: {current: 222, increment: 444}})
     })
 
     it('should support multiple handlers', async function () {
@@ -334,6 +350,7 @@ describe('handleCommand()', pgSpec(function () {
       const instanceA = 'aggregate-instance-a'
       const instanceB = 'aggregate-instance-b'
       const handleCommand = createCommandHandler(
+        serialization,
         {
           [aggregateNameA]: {
             ...emptyAggregate,
@@ -342,7 +359,7 @@ describe('handleCommand()', pgSpec(function () {
             routeCommand: () => instanceA,
             createInitialState: () => ({count: 0}),
             handleCommand: ({state: {count}, recordEvents}) => {
-              recordEvents({type: eventTypeA, data: jsonBuffer(count)})
+              recordEvents({type: eventTypeA, data: count})
             },
             applyEvent: state => ++state.count,
           },
@@ -354,7 +371,7 @@ describe('handleCommand()', pgSpec(function () {
             routeCommand: () => instanceB,
             createInitialState: () => ({count: 0}),
             handleCommand: ({state: {count}, recordEvents}) => {
-              recordEvents({type: eventTypeA, data: jsonBuffer(count)})
+              recordEvents({type: eventTypeA, data: count})
             },
             applyEvent: state => ++state.count,
           },
@@ -370,20 +387,23 @@ describe('handleCommand()', pgSpec(function () {
         isHandled.push(await handleCommand(this.pgClient, createCommandB()))
       })
 
-      const [eventsA] = await asyncIterableToArray(readEventsByStream(this.pgClient, aggregateStreamA, instanceA))
-      const [eventsB] = await asyncIterableToArray(readEventsByStream(this.pgClient, aggregateStreamB, instanceB))
+      const [eventsA] =
+        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instanceA))
+      const [eventsB] =
+        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamB, instanceB))
 
       expect(isHandled).to.deep.equal([true, true, true, true])
       expect(eventsA).to.have.length(2)
-      expect(eventsA[0].event).to.have.fields({type: eventTypeA, data: jsonBuffer(0)})
-      expect(eventsA[1].event).to.have.fields({type: eventTypeA, data: jsonBuffer(1)})
+      expect(eventsA[0].event).to.deep.equal({type: eventTypeA, data: 0})
+      expect(eventsA[1].event).to.deep.equal({type: eventTypeA, data: 1})
       expect(eventsB).to.have.length(2)
-      expect(eventsB[0].event).to.have.fields({type: eventTypeA, data: jsonBuffer(0)})
-      expect(eventsB[1].event).to.have.fields({type: eventTypeA, data: jsonBuffer(1)})
+      expect(eventsB[0].event).to.deep.equal({type: eventTypeA, data: 0})
+      expect(eventsB[1].event).to.deep.equal({type: eventTypeA, data: 1})
     })
 
     it('should throw when recording events with unexpected types', async function () {
       const handleCommand = createCommandHandler(
+        serialization,
         {
           [aggregateNameA]: {
             ...emptyAggregate,
@@ -405,9 +425,10 @@ describe('handleCommand()', pgSpec(function () {
 
   context('when handling commands with integrations', function () {
     it('should be able to handle commands', async function () {
-      const createCommandA = data => ({type: commandTypeA, data: jsonBuffer(data)})
-      const createCommandB = data => ({type: commandTypeB, data: jsonBuffer(data)})
+      const createCommandA = data => ({type: commandTypeA, data})
+      const createCommandB = data => ({type: commandTypeB, data})
       const handleCommand = createCommandHandler(
+        serialization,
         {},
         {
           [integrationNameA]: {
@@ -432,19 +453,21 @@ describe('handleCommand()', pgSpec(function () {
         isHandled.push(await handleCommand(this.pgClient, createCommandB(333)))
       })
 
-      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, integrationStreamA, ''))
+      const [events] =
+        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, integrationStreamA, ''))
 
       expect(isHandled).to.deep.equal([true, true, true])
       expect(events).to.have.length(3)
-      expect(events[0].event).to.have.fields({type: eventTypeA, data: jsonBuffer(111)})
-      expect(events[1].event).to.have.fields({type: eventTypeA, data: jsonBuffer(222)})
-      expect(events[2].event).to.have.fields({type: eventTypeB, data: jsonBuffer(333)})
+      expect(events[0].event).to.deep.equal({type: eventTypeA, data: 111})
+      expect(events[1].event).to.deep.equal({type: eventTypeA, data: 222})
+      expect(events[2].event).to.deep.equal({type: eventTypeB, data: 333})
     })
 
     it('should support multiple handlers', async function () {
-      const createCommandA = data => ({type: commandTypeA, data: jsonBuffer(data)})
-      const createCommandB = data => ({type: commandTypeB, data: jsonBuffer(data)})
+      const createCommandA = data => ({type: commandTypeA, data})
+      const createCommandB = data => ({type: commandTypeB, data})
       const handleCommand = createCommandHandler(
+        serialization,
         {},
         {
           [integrationNameA]: {
@@ -475,20 +498,23 @@ describe('handleCommand()', pgSpec(function () {
         isHandled.push(await handleCommand(this.pgClient, createCommandB(444)))
       })
 
-      const [eventsA] = await asyncIterableToArray(readEventsByStream(this.pgClient, integrationStreamA, ''))
-      const [eventsB] = await asyncIterableToArray(readEventsByStream(this.pgClient, integrationStreamB, ''))
+      const [eventsA] =
+        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, integrationStreamA, ''))
+      const [eventsB] =
+        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, integrationStreamB, ''))
 
       expect(isHandled).to.deep.equal([true, true, true, true])
       expect(eventsA).to.have.length(2)
-      expect(eventsA[0].event).to.have.fields({type: eventTypeA, data: jsonBuffer(111)})
-      expect(eventsA[1].event).to.have.fields({type: eventTypeA, data: jsonBuffer(333)})
+      expect(eventsA[0].event).to.deep.equal({type: eventTypeA, data: 111})
+      expect(eventsA[1].event).to.deep.equal({type: eventTypeA, data: 333})
       expect(eventsB).to.have.length(2)
-      expect(eventsB[0].event).to.have.fields({type: eventTypeA, data: jsonBuffer(222)})
-      expect(eventsB[1].event).to.have.fields({type: eventTypeA, data: jsonBuffer(444)})
+      expect(eventsB[0].event).to.deep.equal({type: eventTypeA, data: 222})
+      expect(eventsB[1].event).to.deep.equal({type: eventTypeA, data: 444})
     })
 
     it('should throw when recording events with unexpected types', async function () {
       const handleCommand = createCommandHandler(
+        serialization,
         {},
         {
           [integrationNameA]: {

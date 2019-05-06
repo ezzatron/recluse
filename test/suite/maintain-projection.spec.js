@@ -7,6 +7,7 @@ const {createClock} = require('../clock.js')
 const {appendEvents} = require('../../src/event.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {maintainProjection} = require('../../src/projection.js')
+const {serialization} = require('../../src/serialization/json.js')
 
 describe('maintainProjection()', pgSpec(function () {
   const nameA = 'projection-name-a'
@@ -14,10 +15,10 @@ describe('maintainProjection()', pgSpec(function () {
   const streamInstanceA = 'stream-instance-a'
   const eventTypeA = 'event-type-a'
   const eventTypeB = 'event-type-b'
-  const eventA = {type: eventTypeA, data: Buffer.from('a')}
-  const eventB = {type: eventTypeB, data: Buffer.from('b')}
-  const eventC = {type: eventTypeA, data: Buffer.from('c')}
-  const eventD = {type: eventTypeB, data: Buffer.from('d')}
+  const eventA = {type: eventTypeA, data: 'a'}
+  const eventB = {type: eventTypeB, data: 'b'}
+  const eventC = {type: eventTypeA, data: 'c'}
+  const eventD = {type: eventTypeB, data: 'd'}
 
   beforeEach(async function () {
     this.sandbox = createSandbox()
@@ -54,7 +55,7 @@ describe('maintainProjection()', pgSpec(function () {
 
   context('before iteration', function () {
     it('should support cancellation', async function () {
-      await maintainProjection(this.pgClient, nameA, this.apply).cancel()
+      await maintainProjection(serialization, this.pgClient, nameA, this.apply).cancel()
 
       expect(await this.query(this.projectionQuery)).to.have.rowCount(0)
     })
@@ -62,12 +63,12 @@ describe('maintainProjection()', pgSpec(function () {
 
   context('while iterating', function () {
     beforeEach(async function () {
-      await appendEvents(this.pgClient, streamTypeA, streamInstanceA, 0, [eventA, eventB])
+      await appendEvents(serialization, this.pgClient, streamTypeA, streamInstanceA, 0, [eventA, eventB])
     })
 
     it('should apply the events in the correct order', async function () {
       await consumeAsyncIterable(
-        maintainProjection(this.pgPool, nameA, this.apply),
+        maintainProjection(serialization, this.pgPool, nameA, this.apply),
         2,
         projection => projection.cancel(),
         (value, i) => expect(value).to.equal(i)
@@ -92,7 +93,7 @@ describe('maintainProjection()', pgSpec(function () {
       }
       const error = new Error('You done goofed')
       const apply = async () => { throw error }
-      const projection = maintainProjection(pool, nameA, apply)
+      const projection = maintainProjection(serialization, pool, nameA, apply)
 
       await expect(consumeAsyncIterable(projection, 1)).to.be.rejectedWith(error)
 
@@ -102,12 +103,12 @@ describe('maintainProjection()', pgSpec(function () {
     it('should be able to apply new events when relying solely on notifications', async function () {
       await Promise.all([
         consumeAsyncIterable(
-          maintainProjection(this.pgPool, nameA, this.apply, {timeout: null}),
+          maintainProjection(serialization, this.pgPool, nameA, this.apply, {timeout: null}),
           4,
           projection => projection.cancel()
         ),
 
-        appendEvents(this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
+        appendEvents(serialization, this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
       ])
 
       expect(await this.query(this.projectionQuery)).to.have.rows([
@@ -123,12 +124,12 @@ describe('maintainProjection()', pgSpec(function () {
 
       await Promise.all([
         consumeAsyncIterable(
-          maintainProjection(this.pgPool, nameA, this.apply, {clock}),
+          maintainProjection(serialization, this.pgPool, nameA, this.apply, {clock}),
           4,
           projection => projection.cancel()
         ),
 
-        appendEvents(this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
+        appendEvents(serialization, this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
       ])
 
       expect(await this.query(this.projectionQuery)).to.have.rows([
@@ -149,12 +150,12 @@ describe('maintainProjection()', pgSpec(function () {
 
       await Promise.all([
         consumeAsyncIterable(
-          maintainProjection(this.pgPool, nameA, this.apply, {clock}),
+          maintainProjection(serialization, this.pgPool, nameA, this.apply, {clock}),
           4,
           projection => projection.cancel()
         ),
 
-        appendEvents(appendClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
+        appendEvents(serialization, appendClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
       ])
 
       expect(await this.query(this.projectionQuery)).to.have.rows([
@@ -168,9 +169,9 @@ describe('maintainProjection()', pgSpec(function () {
 
   context('when resuming the maintenance of an existing projection', function () {
     beforeEach(async function () {
-      await appendEvents(this.pgClient, streamTypeA, streamInstanceA, 0, [eventA, eventB])
+      await appendEvents(serialization, this.pgClient, streamTypeA, streamInstanceA, 0, [eventA, eventB])
       await consumeAsyncIterable(
-        maintainProjection(this.pgPool, nameA, this.apply),
+        maintainProjection(serialization, this.pgPool, nameA, this.apply),
         2,
         projection => projection.cancel()
       )
@@ -179,12 +180,12 @@ describe('maintainProjection()', pgSpec(function () {
     it('should apply new events in the correct order', async function () {
       await Promise.all([
         consumeAsyncIterable(
-          maintainProjection(this.pgPool, nameA, this.apply, {timeout: null}),
+          maintainProjection(serialization, this.pgPool, nameA, this.apply, {timeout: null}),
           2,
           projection => projection.cancel()
         ),
 
-        appendEvents(this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
+        appendEvents(serialization, this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
       ])
 
       expect(await this.query(this.projectionQuery)).to.have.rows([
@@ -199,7 +200,7 @@ describe('maintainProjection()', pgSpec(function () {
   context('when multiple workers try to maintain the same projection', function () {
     it('should cooperatively apply events using a single worker at a time', async function () {
       const maintain = () => consumeAsyncIterable(
-        maintainProjection(this.pgPool, nameA, this.apply, {timeout: null}),
+        maintainProjection(serialization, this.pgPool, nameA, this.apply, {timeout: null}),
         2,
         projection => projection.cancel()
       )
@@ -208,7 +209,7 @@ describe('maintainProjection()', pgSpec(function () {
         maintain(),
         maintain(),
 
-        appendEvents(this.pgClient, streamTypeA, streamInstanceA, 0, [eventA, eventB, eventC, eventD]),
+        appendEvents(serialization, this.pgClient, streamTypeA, streamInstanceA, 0, [eventA, eventB, eventC, eventD]),
       ])
 
       expect(await this.query(this.projectionQuery)).to.have.rows([

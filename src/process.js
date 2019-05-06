@@ -1,11 +1,12 @@
 const {executeCommands: executeCommandsRaw} = require('./command.js')
 const {maintainProjection} = require('./projection.js')
+const {PROCESS} = require('./handler.js')
 
 module.exports = {
   maintainProcess,
 }
 
-function maintainProcess (pgPool, name, process, options = {}) {
+function maintainProcess (serialization, pgPool, name, process, options = {}) {
   const processType = `process.${name}`
   const {commandTypes, createInitialState, eventTypes, handleEvent, routeEvent} = process
   const {timeout, clock} = options
@@ -17,7 +18,7 @@ function maintainProcess (pgPool, name, process, options = {}) {
 
     if (!instance) return false
 
-    const state = await readState(pgClient, processType, instance, createInitialState)
+    const state = await readState(serialization, pgClient, name, processType, instance, createInitialState)
 
     let shouldReplaceState = false
     let nextState
@@ -41,32 +42,38 @@ function maintainProcess (pgPool, name, process, options = {}) {
     }
 
     await handleEvent({event, executeCommands, replaceState, state})
-    await executeCommandsRaw(pgClient, processType, executedCommands)
-    if (shouldReplaceState) await writeState(pgClient, processType, instance, nextState)
+    await executeCommandsRaw(serialization, pgClient, processType, executedCommands)
+    if (shouldReplaceState) await writeState(serialization, pgClient, name, processType, instance, nextState)
 
     return true
   }
 
-  return maintainProjection(pgPool, processType, apply, {timeout, clock})
+  return maintainProjection(serialization, pgPool, processType, apply, {timeout, clock})
 }
 
-async function readState (pgClient, processType, instance, createInitialState) {
+async function readState (serialization, pgClient, name, processType, instance, createInitialState) {
   const result = await pgClient.query(
     'SELECT state FROM recluse.process WHERE type = $1 AND instance = $2',
     [processType, instance]
   )
 
-  if (result.rowCount > 0) return result.rows[0].state
+  if (result.rowCount > 0) {
+    const {unserialize} = serialization
+
+    return unserialize(result.rows[0].state, PROCESS, name)
+  }
 
   return createInitialState()
 }
 
-async function writeState (pgClient, processType, instance, state) {
+async function writeState (serialization, pgClient, name, processType, instance, state) {
+  const {serialize} = serialization
+
   await pgClient.query(
     `
     INSERT INTO recluse.process (type, instance, state) VALUES ($1, $2, $3)
     ON CONFLICT (type, instance) DO UPDATE SET state = $3
     `,
-    [processType, instance, state]
+    [processType, instance, serialize(state, PROCESS, name)]
   )
 }

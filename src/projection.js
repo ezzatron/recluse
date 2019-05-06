@@ -8,9 +8,9 @@ module.exports = {
   maintainProjection,
 }
 
-function maintainProjection (pgPool, name, apply, options = {}) {
+function maintainProjection (serialization, pgPool, name, applyEvent, options = {}) {
   const {timeout, type = `projection.${name}`, clock} = options
-  const iterator = createProjectionIterator(pgPool, type, apply, timeout, clock)
+  const iterator = createProjectionIterator(serialization, pgPool, type, applyEvent, timeout, clock)
 
   return {
     [Symbol.asyncIterator]: () => iterator,
@@ -18,7 +18,7 @@ function maintainProjection (pgPool, name, apply, options = {}) {
   }
 }
 
-function createProjectionIterator (pgPool, type, apply, timeout, clock) {
+function createProjectionIterator (serialization, pgPool, type, applyEvent, timeout, clock) {
   let id, start, iterator, pgClient
   let isLocked = false
 
@@ -32,11 +32,11 @@ function createProjectionIterator (pgPool, type, apply, timeout, clock) {
         isLocked = true
 
         start = await readProjectionNext(pgClient, id)
-        iterator = acquireAsyncIterator(readEventsContinuously(pgClient, {start, timeout, clock}))
+        iterator = acquireAsyncIterator(readEventsContinuously(serialization, pgClient, {start, timeout, clock}))
       }
 
       const {value: {event}} = await iterator.next()
-      const value = await applyEvent(pgPool, type, apply, start++, event)
+      const value = await apply(pgPool, type, applyEvent, start++, event)
 
       return {done: false, value}
     },
@@ -51,14 +51,14 @@ function createProjectionIterator (pgPool, type, apply, timeout, clock) {
   }
 }
 
-async function applyEvent (pgPool, type, apply, offset, event) {
+async function apply (pgPool, type, applyEvent, offset, event) {
   const pgClient = await pgPool.connect()
 
   try {
     return inTransaction(pgClient, async () => {
       await incrementProjection(pgClient, type, offset)
 
-      return apply(pgClient, event)
+      return applyEvent(pgClient, event)
     })
   } finally {
     pgClient.release()

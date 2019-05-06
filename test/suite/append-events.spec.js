@@ -5,6 +5,7 @@ const {asyncIterableToArray, pgSpec} = require('../helper.js')
 const {appendEvents, readEvents, readEventsByStream} = require('../../src/event.js')
 const {EVENT: CHANNEL} = require('../../src/channel.js')
 const {initializeSchema} = require('../../src/schema.js')
+const {serialization} = require('../../src/serialization/json.js')
 const {waitForNotification} = require('../../src/pg.js')
 
 describe('appendEvents()', pgSpec(function () {
@@ -13,10 +14,10 @@ describe('appendEvents()', pgSpec(function () {
   const instanceB = 'stream-instance-b'
   const eventTypeA = 'event-type-a'
   const eventTypeB = 'event-type-b'
-  const eventA = {type: eventTypeA, data: Buffer.from('a')}
-  const eventB = {type: eventTypeB, data: Buffer.from('b')}
-  const eventC = {type: eventTypeA, data: Buffer.from('c')}
-  const eventD = {type: eventTypeB, data: Buffer.from('d')}
+  const eventA = {type: eventTypeA, data: 'a'}
+  const eventB = {type: eventTypeB, data: 'b'}
+  const eventC = {type: eventTypeA, data: 'c'}
+  const eventD = {type: eventTypeB, data: 'd'}
 
   beforeEach(async function () {
     await initializeSchema(this.pgClient)
@@ -24,71 +25,77 @@ describe('appendEvents()', pgSpec(function () {
 
   context('with a new stream', function () {
     it('should be able to append to the stream', async function () {
-      const wasAppended =
-        await this.inTransaction(async () => appendEvents(this.pgClient, typeA, instanceA, 0, [eventA, eventB]))
-      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA))
+      const wasAppended = await this.inTransaction(
+        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA, eventB])
+      )
+      const [events] = await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, typeA, instanceA))
 
       expect(wasAppended).to.be.true()
       expect(events).to.have.length(2)
-      expect(events[0].event).to.have.fields(eventA)
-      expect(events[1].event).to.have.fields(eventB)
+      expect(events[0].event).to.deep.equal(eventA)
+      expect(events[1].event).to.deep.equal(eventB)
     })
 
     it('should be able to append events with null data', async function () {
       const event = {type: eventTypeA, data: null}
-      const wasAppended =
-        await this.inTransaction(async () => appendEvents(this.pgClient, typeA, instanceA, 0, [event]))
-      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA))
+      const wasAppended = await this.inTransaction(
+        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [event])
+      )
+      const [events] = await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, typeA, instanceA))
 
       expect(wasAppended).to.be.true()
       expect(events).to.have.length(1)
-      expect(events[0].event).to.have.fields({type: eventTypeA})
+      expect(events[0].event).to.deep.equal({type: eventTypeA})
       expect(events[0].event.data).to.be.undefined()
     })
 
     it('should be able to append events with undefined data', async function () {
       const event = {type: eventTypeA}
       const wasAppended =
-        await this.inTransaction(async () => appendEvents(this.pgClient, typeA, instanceA, 0, [event]))
-      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA))
+        await this.inTransaction(async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [event]))
+      const [events] = await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, typeA, instanceA))
 
       expect(wasAppended).to.be.true()
       expect(events).to.have.length(1)
-      expect(events[0].event).to.have.fields({type: eventTypeA})
+      expect(events[0].event).to.deep.equal({type: eventTypeA})
       expect(events[0].event.data).to.be.undefined()
     })
   })
 
   context('with an existing stream', function () {
     beforeEach(async function () {
-      await this.inTransaction(async () => appendEvents(this.pgClient, typeA, instanceA, 0, [eventA, eventB]))
+      await this.inTransaction(
+        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA, eventB])
+      )
     })
 
     it('should be able to append to the stream', async function () {
       const wasAppended = await this.inTransaction(
-        async () => appendEvents(this.pgClient, typeA, instanceA, 2, [eventC, eventD])
+        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 2, [eventC, eventD])
       )
-      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA, 2))
+      const [events] = await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, typeA, instanceA, 2))
 
       expect(wasAppended).to.be.true()
       expect(events).to.have.length(2)
-      expect(events[0].event).to.have.fields(eventC)
-      expect(events[1].event).to.have.fields(eventD)
+      expect(events[0].event).to.deep.equal(eventC)
+      expect(events[1].event).to.deep.equal(eventD)
     })
 
     it('should fail if the specified offset is less than the next stream offset', async function () {
-      const wasAppended =
-        await this.inTransaction(async () => appendEvents(this.pgClient, typeA, instanceA, 1, [eventC, eventD]))
-      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA))
+      const wasAppended = await this.inTransaction(
+        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 1, [eventC, eventD])
+      )
+      const [events] = await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, typeA, instanceA))
 
       expect(wasAppended).to.be.false()
       expect(events).to.have.length(2)
     })
 
     it('should fail if the specified offset is greater than the next stream offset', async function () {
-      const wasAppended =
-        await this.inTransaction(async () => appendEvents(this.pgClient, typeA, instanceA, 3, [eventC, eventD]))
-      const [events] = await asyncIterableToArray(readEventsByStream(this.pgClient, typeA, instanceA))
+      const wasAppended = await this.inTransaction(
+        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 3, [eventC, eventD])
+      )
+      const [events] = await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, typeA, instanceA))
 
       expect(wasAppended).to.be.false()
       expect(events).to.have.length(2)
@@ -97,24 +104,24 @@ describe('appendEvents()', pgSpec(function () {
 
   context('with multiple streams', function () {
     beforeEach(async function () {
-      await this.inTransaction(async () => appendEvents(this.pgClient, typeA, instanceA, 0, [eventA]))
-      await this.inTransaction(async () => appendEvents(this.pgClient, typeA, instanceB, 0, [eventB]))
-      await this.inTransaction(async () => appendEvents(this.pgClient, typeA, instanceA, 1, [eventC]))
-      await this.inTransaction(async () => appendEvents(this.pgClient, typeA, instanceB, 1, [eventD]))
+      await this.inTransaction(async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA]))
+      await this.inTransaction(async () => appendEvents(serialization, this.pgClient, typeA, instanceB, 0, [eventB]))
+      await this.inTransaction(async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 1, [eventC]))
+      await this.inTransaction(async () => appendEvents(serialization, this.pgClient, typeA, instanceB, 1, [eventD]))
     })
 
     it('should record the global offset', async function () {
-      const [events] = await asyncIterableToArray(readEvents(this.pgClient))
+      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
 
       expect(events).to.have.length(4)
       expect(events[0]).to.have.fields({globalOffset: 0})
-      expect(events[0].event).to.have.fields(eventA)
+      expect(events[0].event).to.deep.equal(eventA)
       expect(events[1]).to.have.fields({globalOffset: 1})
-      expect(events[1].event).to.have.fields(eventB)
+      expect(events[1].event).to.deep.equal(eventB)
       expect(events[2]).to.have.fields({globalOffset: 2})
-      expect(events[2].event).to.have.fields(eventC)
+      expect(events[2].event).to.deep.equal(eventC)
       expect(events[3]).to.have.fields({globalOffset: 3})
-      expect(events[3].event).to.have.fields(eventD)
+      expect(events[3].event).to.deep.equal(eventD)
     })
   })
 
@@ -129,11 +136,11 @@ describe('appendEvents()', pgSpec(function () {
       await this.pgClient.query('BEGIN')
 
       // this append acquires the lock for pgClient
-      await appendEvents(this.pgClient, typeA, instanceA, 0, [eventA])
+      await appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA])
 
       // this append will be started first, but must wait for pgClient's lock to be released to proceed
       const appendB = async () => {
-        const result = await appendEvents(this.secondaryPgClient, typeA, instanceA, 0, [eventC])
+        const result = await appendEvents(serialization, this.secondaryPgClient, typeA, instanceA, 0, [eventC])
 
         if (result) {
           await this.secondaryPgClient.query('COMMIT')
@@ -146,7 +153,7 @@ describe('appendEvents()', pgSpec(function () {
 
       // this append will be started second, but can freely proceed since pgClient has the lock
       const appendA = async () => {
-        const result = await appendEvents(this.pgClient, typeA, instanceA, 1, [eventB])
+        const result = await appendEvents(serialization, this.pgClient, typeA, instanceA, 1, [eventB])
 
         if (result) {
           await this.pgClient.query('COMMIT')
@@ -161,13 +168,13 @@ describe('appendEvents()', pgSpec(function () {
       // awaiting appendB without also awaiting appendA would cause a deadlock
       const [resultB, resultA] = await Promise.all([appendB(), appendA()])
 
-      const [events] = await asyncIterableToArray(readEvents(this.pgClient))
+      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
 
       expect(resultA).to.be.true()
       expect(resultB).to.be.false()
       expect(events).to.have.length(2)
-      expect(events[0].event).to.have.fields(eventA)
-      expect(events[1].event).to.have.fields(eventB)
+      expect(events[0].event).to.deep.equal(eventA)
+      expect(events[1].event).to.deep.equal(eventB)
     })
   })
 
@@ -181,7 +188,7 @@ describe('appendEvents()', pgSpec(function () {
     it('should notify listening clients when appending events', async function () {
       const [notification] = await Promise.all([
         this.waitForEvent,
-        this.inTransaction(async () => appendEvents(this.pgClient, typeA, instanceA, 0, [eventA])),
+        this.inTransaction(async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA])),
       ])
 
       expect(notification.channel).to.equal(CHANNEL)

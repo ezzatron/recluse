@@ -4,11 +4,12 @@ const {pgSpec} = require('../helper.js')
 
 const {appendEvents, readNextStreamOffset} = require('../../src/event.js')
 const {initializeSchema} = require('../../src/schema.js')
+const {serialization} = require('../../src/serialization/json.js')
 
 describe('readNextStreamOffset()', pgSpec(function () {
   const type = 'stream-type-a'
   const instance = 'stream-instance-a'
-  const event = {type: 'event-type-a', data: Buffer.from('a')}
+  const event = {type: 'event-type-a', data: 'a'}
 
   beforeEach(async function () {
     await initializeSchema(this.pgClient)
@@ -30,7 +31,7 @@ describe('readNextStreamOffset()', pgSpec(function () {
 
   context('with a non-empty stream', function () {
     beforeEach(async function () {
-      await appendEvents(this.pgClient, type, instance, 0, [event, event])
+      await appendEvents(serialization, this.pgClient, type, instance, 0, [event, event])
     })
 
     it('should return a positive offset', async function () {

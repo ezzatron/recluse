@@ -4,15 +4,14 @@ const {consumeAsyncIterable, pgSpec, TIME_PATTERN} = require('../helper.js')
 
 const {executeCommands, readUnhandledCommandsContinuously} = require('../../src/command.js')
 const {initializeSchema} = require('../../src/schema.js')
+const {serialization} = require('../../src/serialization/json.js')
 
 describe('readUnhandledCommandsContinuously()', pgSpec(function () {
   const sourceA = 'command-source-a'
   const commandTypeA = 'command-type-a'
   const commandTypeB = 'command-type-b'
-  const commandDataA = Buffer.from('a')
-  const commandDataB = Buffer.from('b')
-  const commandA = {type: commandTypeA, data: commandDataA}
-  const commandB = {type: commandTypeB, data: commandDataB}
+  const commandA = {type: commandTypeA, data: 'a'}
+  const commandB = {type: commandTypeB, data: 'b'}
 
   beforeEach(async function () {
     await initializeSchema(this.pgClient)
@@ -20,13 +19,13 @@ describe('readUnhandledCommandsContinuously()', pgSpec(function () {
 
   context('with no commands', function () {
     it('should support cancellation', async function () {
-      await readUnhandledCommandsContinuously(this.pgClient).cancel()
+      await readUnhandledCommandsContinuously(serialization, this.pgClient).cancel()
     })
   })
 
   context('with only unhandled commands', function () {
     beforeEach(async function () {
-      await executeCommands(this.pgClient, sourceA, [commandA, commandB])
+      await executeCommands(serialization, this.pgClient, sourceA, [commandA, commandB])
     })
 
     it('should return all commands', async function () {
@@ -40,12 +39,12 @@ describe('readUnhandledCommandsContinuously()', pgSpec(function () {
       ]
 
       await consumeAsyncIterable(
-        readUnhandledCommandsContinuously(this.pgClient),
+        readUnhandledCommandsContinuously(serialization, this.pgClient),
         expected.length,
         commands => commands.cancel(),
         wrapper => {
           expect(wrapper).to.have.fields(expectedWrappers.shift())
-          expect(wrapper.command).to.have.fields(expected.shift())
+          expect(wrapper.command).to.deep.equal(expected.shift())
         }
       )
     })
@@ -53,7 +52,7 @@ describe('readUnhandledCommandsContinuously()', pgSpec(function () {
 
   context('with some handled commands', function () {
     beforeEach(async function () {
-      await executeCommands(this.pgClient, sourceA, [commandA, commandB])
+      await executeCommands(serialization, this.pgClient, sourceA, [commandA, commandB])
       await this.query('UPDATE recluse.command SET handled_at = now() WHERE id = 0')
     })
 
@@ -66,12 +65,12 @@ describe('readUnhandledCommandsContinuously()', pgSpec(function () {
       ]
 
       await consumeAsyncIterable(
-        readUnhandledCommandsContinuously(this.pgClient, {id: 1}),
+        readUnhandledCommandsContinuously(serialization, this.pgClient, {id: 1}),
         expected.length,
         commands => commands.cancel(),
         wrapper => {
           expect(wrapper).to.have.fields(expectedWrappers.shift())
-          expect(wrapper.command).to.have.fields(expected.shift())
+          expect(wrapper.command).to.deep.equal(expected.shift())
         }
       )
     })
