@@ -33,7 +33,10 @@ function createRun (spec) {
   } = spec
 
   return async function run (options = {}) {
-    const {env = process.env} = options
+    const {
+      env = process.env,
+      exit = process.exit,
+    } = options
 
     const {
       clock = systemClock,
@@ -98,16 +101,26 @@ function createRun (spec) {
       }
     })
 
+    function die (code, message) {
+      if (code === 0) {
+        logger.info(message)
+      } else {
+        logger.error(message)
+      }
+
+      exit(code)
+    }
+
     Promise.all(runners).then(
-      () => { logger.info('Stopping') },
-      error => { logger.error(`Stopping: ${error.stack}`) }
+      () => die(0, 'Stopping'),
+      error => die(1, `Stopping: ${error.stack}`)
     )
 
     return function stop () {
       const cancellations = threads.map(([_, thread]) => thread.cancel())
 
       Promise.all(cancellations)
-        .catch(error => { logger.error(`Cancellation failed: ${error.stack}`) })
+        .catch(error => die(1, `Cancellation failed: ${error.stack}`))
     }
   }
 }
