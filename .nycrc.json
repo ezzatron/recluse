@@ -1,4 +1,8 @@
 {
+  "all": true,
+  "include": [
+    "src/**/*.js"
+  ],
   "report-dir": "artifacts/tests/coverage/html",
   "reporter": "html",
   "temp-dir": "artifacts/tests/coverage/nyc"
