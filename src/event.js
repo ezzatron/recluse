@@ -1,7 +1,7 @@
-const {asyncQuery, continuousQuery, UNIQUE_VIOLATION} = require('./pg.js')
-const {createLazyGetter} = require('./object.js')
 const {EVENT: CHANNEL} = require('./channel.js')
 const {EVENT} = require('./handler.js')
+const {createLazyGetter} = require('./object.js')
+const {asyncQuery, continuousQuery, UNIQUE_VIOLATION} = require('./pg.js')
 
 module.exports = {
   appendEvents,

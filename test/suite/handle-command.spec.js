@@ -1,9 +1,9 @@
-const {asyncIterableToArray} = require('../helper/async.js')
 const {createCommandHandler} = require('../../src/command-handler.js')
-const {createTestHelper} = require('../helper/pg.js')
-const {initializeSchema} = require('../../src/schema.js')
 const {readEventsByStream} = require('../../src/event.js')
+const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
+const {asyncIterableToArray} = require('../helper/async.js')
+const {createTestHelper} = require('../helper/pg.js')
 
 describe('handleCommand()', () => {
   const pgHelper = createTestHelper()
@@ -323,7 +323,7 @@ describe('handleCommand()', () => {
               await recordEvents({type: eventTypeA, data: {current: state, increment}})
             },
 
-            applyEvent: async ({event: {type, data: {increment}}, updateState}) => {
+            applyEvent: async ({event: {data: {increment}}, updateState}) => {
               await updateState(state => state + increment)
             },
           },

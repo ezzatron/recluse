@@ -1,5 +1,5 @@
-const {createStateController} = require('../../src/state.js')
 const {serialization: {copy}} = require('../../src/serialization/json.js')
+const {createStateController} = require('../../src/state.js')
 
 describe('createStateController()', () => {
   const increment = async state => { state.number++ }

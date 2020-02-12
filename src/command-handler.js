@@ -1,10 +1,10 @@
-const {acquireAsyncIterator} = require('./iterator.js')
-const {acquireSessionLock, inTransaction, releaseSessionLock} = require('./pg.js')
-const {allSerial} = require('./async.js')
-const {COMMAND: LOCK_NAMESPACE} = require('./lock.js')
 const {handleCommandWithAggregate} = require('./aggregate.js')
-const {handleCommandWithIntegration} = require('./integration.js')
+const {allSerial} = require('./async.js')
 const {readUnhandledCommandsContinuously} = require('./command.js')
+const {handleCommandWithIntegration} = require('./integration.js')
+const {acquireAsyncIterator} = require('./iterator.js')
+const {COMMAND: LOCK_NAMESPACE} = require('./lock.js')
+const {acquireSessionLock, inTransaction, releaseSessionLock} = require('./pg.js')
 
 module.exports = {
   createCommandHandler,

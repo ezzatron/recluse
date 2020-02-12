@@ -1,8 +1,8 @@
 const {appendEvents, readEventsByStream} = require('../../src/event.js')
-const {asyncIterableToArray, consumeAsyncIterable} = require('../helper/async.js')
-const {createTestHelper, TIME_PATTERN} = require('../helper/pg.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
+const {asyncIterableToArray, consumeAsyncIterable} = require('../helper/async.js')
+const {createTestHelper, TIME_PATTERN} = require('../helper/pg.js')
 
 describe('readEventsByStream()', () => {
   const pgHelper = createTestHelper()

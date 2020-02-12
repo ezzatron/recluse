@@ -1,12 +1,12 @@
+const {createCommandHandler, maintainCommandHandler} = require('../../src/command-handler.js')
+const {executeCommands} = require('../../src/command.js')
+const {readEvents} = require('../../src/event.js')
+const {UNIQUE_VIOLATION} = require('../../src/pg.js')
+const {initializeSchema} = require('../../src/schema.js')
+const {serialization} = require('../../src/serialization/json.js')
 const {asyncIterableToArray, consumeAsyncIterable} = require('../helper/async.js')
 const {createClock} = require('../helper/clock.js')
-const {createCommandHandler, maintainCommandHandler} = require('../../src/command-handler.js')
 const {createTestHelper} = require('../helper/pg.js')
-const {executeCommands} = require('../../src/command.js')
-const {initializeSchema} = require('../../src/schema.js')
-const {readEvents} = require('../../src/event.js')
-const {serialization} = require('../../src/serialization/json.js')
-const {UNIQUE_VIOLATION} = require('../../src/pg.js')
 
 describe('maintainCommandHandler()', () => {
   const pgHelper = createTestHelper()

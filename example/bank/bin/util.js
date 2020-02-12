@@ -19,7 +19,7 @@ async function accountIdByName (pgClient, name) {
 }
 
 function die (message) {
-  console.log(message)
+  console.log(message) // eslint-disable-line no-console
 
   process.exit(1)
 }
@@ -31,7 +31,7 @@ async function executeCommands (pgClient, ...commands) {
 
 function runAsync (fn) {
   fn.catch(error => {
-    console.error(error.stack)
+    console.error(error.stack) // eslint-disable-line no-console
 
     process.exit(1)
   })

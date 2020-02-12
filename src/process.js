@@ -1,7 +1,7 @@
-const {createStateController} = require('./state.js')
 const {executeCommands: executeCommandsRaw} = require('./command.js')
-const {maintainProjection} = require('./projection.js')
 const {PROCESS} = require('./handler.js')
+const {maintainProjection} = require('./projection.js')
+const {createStateController} = require('./state.js')
 
 module.exports = {
   maintainProcess,

@@ -1,12 +1,12 @@
+const {systemClock} = require('./clock.js')
 const {createCommandHandler, maintainCommandHandler} = require('./command-handler.js')
 const {createLogger} = require('./logging.js')
 const {createPool} = require('./pg.js')
-const {initializeSchema} = require('./schema.js')
 const {maintainProcess} = require('./process.js')
 const {maintainProjection} = require('./projection.js')
-const {normalizeSpec} = require('./spec.js')
+const {initializeSchema} = require('./schema.js')
 const {serialization: jsonSerialization} = require('./serialization/json.js')
-const {systemClock} = require('./clock.js')
+const {normalizeSpec} = require('./spec.js')
 
 module.exports = {
   createApp,
@@ -117,7 +117,7 @@ function createRun (spec) {
     )
 
     return function stop () {
-      const cancellations = threads.map(([_, thread]) => thread.cancel())
+      const cancellations = threads.map(([, thread]) => thread.cancel())
 
       Promise.all(cancellations)
         .catch(error => die(1, `Cancellation failed: ${error.stack}`))

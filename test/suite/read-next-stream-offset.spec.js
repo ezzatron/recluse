@@ -1,7 +1,7 @@
 const {appendEvents, readNextStreamOffset} = require('../../src/event.js')
-const {createTestHelper} = require('../helper/pg.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
+const {createTestHelper} = require('../helper/pg.js')
 
 describe('readNextStreamOffset()', () => {
   const pgHelper = createTestHelper()

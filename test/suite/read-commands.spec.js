@@ -1,8 +1,8 @@
-const {createTestHelper, TIME_PATTERN} = require('../helper/pg.js')
-const {asyncIterableToArray, consumeAsyncIterable} = require('../helper/async.js')
 const {executeCommands, readCommands} = require('../../src/command.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
+const {asyncIterableToArray, consumeAsyncIterable} = require('../helper/async.js')
+const {createTestHelper, TIME_PATTERN} = require('../helper/pg.js')
 
 describe('readCommands()', () => {
   const pgHelper = createTestHelper()

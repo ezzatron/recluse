@@ -1,7 +1,7 @@
-const {asyncQuery, continuousQuery} = require('./pg.js')
 const {COMMAND: CHANNEL} = require('./channel.js')
 const {COMMAND} = require('./handler.js')
 const {createLazyGetter} = require('./object.js')
+const {asyncQuery, continuousQuery} = require('./pg.js')
 
 module.exports = {
   executeCommands,

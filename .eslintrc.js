@@ -11,15 +11,32 @@ module.exports = {
     jest: true
   },
   rules: {
-    'comma-dangle': ['error', 'always-multiline'],
-    'no-unused-vars': 'error',
+    'arrow-parens': ['error', 'as-needed'],
+    'comma-dangle': ['error', {
+      arrays: 'always-multiline',
+      objects: 'always-multiline',
+      imports: 'always-multiline',
+      exports: 'always-multiline',
+      functions: 'always-multiline',
+    }],
+    'no-prototype-builtins': 'off',
+    'no-unused-vars': ['error', {
+      args: 'after-used',
+      ignoreRestSiblings: true,
+    }],
     'object-curly-spacing': ['error', 'never'],
+    'padding-line-between-statements': ['error', {
+      blankLine: 'always',
+      prev: '*',
+      next: 'return',
+    }],
     'prefer-const': 'error',
     'quote-props': ['error', 'as-needed'],
 
     'import/default': 'error',
+    'import/dynamic-import-chunkname': 'error',
     'import/export': 'error',
-    'import/extensions': ['error', 'always'],
+    'import/extensions': ['error', 'ignorePackages'],
     'import/first': 'error',
     'import/named': 'error',
     'import/namespace': 'error',
@@ -35,7 +52,20 @@ module.exports = {
     'import/no-self-import': 'error',
     'import/no-unresolved': 'error',
     'import/no-useless-path-segments': 'error',
+    'import/order': ['error', {
+      alphabetize: {order: 'asc'},
+      groups: [
+        ['builtin', 'external'],
+        ['index', 'internal', 'parent', 'sibling', 'unknown'],
+      ],
+      'newlines-between': 'ignore',
+      pathGroups: [
+        {pattern: '~/**', group: 'internal'},
+      ],
+    }],
 
-    'jest/no-focused-tests': 'warn',
+    'no-alert': 'warn',
+    'no-console': 'warn',
+    'no-debugger': 'warn',
   }
 }

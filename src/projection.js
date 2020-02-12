@@ -1,8 +1,8 @@
-const {acquireAsyncIterator} = require('./iterator.js')
-const {acquireSessionLock, inTransaction, releaseSessionLock} = require('./pg.js')
 const {allSerial} = require('./async.js')
-const {PROJECTION: LOCK_NAMESPACE} = require('./lock.js')
 const {readEventsContinuously} = require('./event.js')
+const {acquireAsyncIterator} = require('./iterator.js')
+const {PROJECTION: LOCK_NAMESPACE} = require('./lock.js')
+const {acquireSessionLock, inTransaction, releaseSessionLock} = require('./pg.js')
 
 module.exports = {
   maintainProjection,

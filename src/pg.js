@@ -1,9 +1,9 @@
-const Cursor = require('pg-cursor')
 const {Pool, types} = require('pg')
+const Cursor = require('pg-cursor')
 
-const {acquireAsyncIterator} = require('./iterator.js')
 const {allSerial} = require('./async.js')
 const {systemClock} = require('./clock.js')
+const {acquireAsyncIterator} = require('./iterator.js')
 
 const UNIQUE_VIOLATION = '23505'
 

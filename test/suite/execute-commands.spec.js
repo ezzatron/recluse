@@ -1,10 +1,10 @@
-const {asyncIterableToArray} = require('../helper/async.js')
 const {COMMAND: CHANNEL} = require('../../src/channel.js')
-const {createTestHelper} = require('../helper/pg.js')
 const {executeCommands, readCommands} = require('../../src/command.js')
+const {waitForNotification} = require('../../src/pg.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
-const {waitForNotification} = require('../../src/pg.js')
+const {asyncIterableToArray} = require('../helper/async.js')
+const {createTestHelper} = require('../helper/pg.js')
 
 describe('executeCommands()', () => {
   const pgHelper = createTestHelper()

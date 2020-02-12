@@ -1,11 +1,11 @@
+const {readCommands} = require('../../src/command.js')
 const {appendEvents} = require('../../src/event.js')
+const {maintainProcess} = require('../../src/process.js')
+const {initializeSchema} = require('../../src/schema.js')
+const {serialization} = require('../../src/serialization/json.js')
 const {asyncIterableToArray, consumeAsyncIterable} = require('../helper/async.js')
 const {createClock} = require('../helper/clock.js')
 const {createTestHelper} = require('../helper/pg.js')
-const {initializeSchema} = require('../../src/schema.js')
-const {maintainProcess} = require('../../src/process.js')
-const {readCommands} = require('../../src/command.js')
-const {serialization} = require('../../src/serialization/json.js')
 
 describe('maintainProcess()', () => {
   const pgHelper = createTestHelper()

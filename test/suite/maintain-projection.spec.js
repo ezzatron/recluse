@@ -1,10 +1,10 @@
 const {appendEvents} = require('../../src/event.js')
+const {maintainProjection} = require('../../src/projection.js')
+const {initializeSchema} = require('../../src/schema.js')
+const {serialization} = require('../../src/serialization/json.js')
 const {consumeAsyncIterable} = require('../helper/async.js')
 const {createClock} = require('../helper/clock.js')
 const {createTestHelper} = require('../helper/pg.js')
-const {initializeSchema} = require('../../src/schema.js')
-const {maintainProjection} = require('../../src/projection.js')
-const {serialization} = require('../../src/serialization/json.js')
 
 describe('maintainProjection()', () => {
   const pgHelper = createTestHelper()
