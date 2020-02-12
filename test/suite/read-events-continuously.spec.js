@@ -1,12 +1,16 @@
-const {expect} = require('chai')
-
-const {consumeAsyncIterable, pgSpec, TIME_PATTERN} = require('../helper.js')
-
 const {appendEvents, readEventsContinuously} = require('../../src/event.js')
+const {consumeAsyncIterable} = require('../helper/async.js')
+const {createTestHelper, TIME_PATTERN} = require('../helper/pg.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
 
-describe('readEventsContinuously()', pgSpec(function () {
+describe('readEventsContinuously()', () => {
+  const pgHelper = createTestHelper()
+
+  beforeEach(async () => {
+    await initializeSchema(pgHelper.client)
+  })
+
   const typeA = 'stream-type-a'
   const instanceA = 'stream-instance-a'
   const instanceB = 'stream-instance-b'
@@ -17,22 +21,18 @@ describe('readEventsContinuously()', pgSpec(function () {
   const eventC = {type: eventTypeA, data: 'c'}
   const eventD = {type: eventTypeB, data: 'd'}
 
-  beforeEach(async function () {
-    await initializeSchema(this.pgClient)
-  })
-
-  context('with no events', function () {
-    it('should support cancellation', async function () {
-      await readEventsContinuously(serialization, this.pgClient).cancel()
+  describe('with no events', () => {
+    it('should support cancellation', async () => {
+      expect(await readEventsContinuously(serialization, pgHelper.client).cancel()).toBeUndefined()
     })
   })
 
-  context('with a non-empty stream', function () {
-    beforeEach(async function () {
-      await appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA, eventB])
+  describe('with a non-empty stream', () => {
+    beforeEach(async () => {
+      await appendEvents(serialization, pgHelper.client, typeA, instanceA, 0, [eventA, eventB])
     })
 
-    it('should return the correct events for offset 0', async function () {
+    it('should return the correct events for offset 0', async () => {
       const expectedWrappers = [
         {globalOffset: 0, time: TIME_PATTERN},
         {globalOffset: 1, time: TIME_PATTERN},
@@ -43,17 +43,17 @@ describe('readEventsContinuously()', pgSpec(function () {
       ]
 
       await consumeAsyncIterable(
-        readEventsContinuously(serialization, this.pgClient),
+        readEventsContinuously(serialization, pgHelper.client),
         expected.length,
         events => events.cancel(),
         wrapper => {
-          expect(wrapper).to.have.fields(expectedWrappers.shift())
-          expect(wrapper.event).to.deep.equal(expected.shift())
+          expect(wrapper).toMatchObject(expectedWrappers.shift())
+          expect(wrapper.event).toEqual(expected.shift())
         },
       )
     })
 
-    it('should return the correct events for positive offsets that exist', async function () {
+    it('should return the correct events for positive offsets that exist', async () => {
       const expectedWrappers = [
         {globalOffset: 1, time: TIME_PATTERN},
       ]
@@ -62,32 +62,32 @@ describe('readEventsContinuously()', pgSpec(function () {
       ]
 
       await consumeAsyncIterable(
-        readEventsContinuously(serialization, this.pgClient, {start: 1}),
+        readEventsContinuously(serialization, pgHelper.client, {start: 1}),
         expected.length,
         events => events.cancel(),
         wrapper => {
-          expect(wrapper).to.have.fields(expectedWrappers.shift())
-          expect(wrapper.event).to.deep.equal(expected.shift())
+          expect(wrapper).toMatchObject(expectedWrappers.shift())
+          expect(wrapper.event).toEqual(expected.shift())
         },
       )
     })
   })
 
-  context('with multiple non-empty streams', function () {
-    beforeEach(async function () {
-      await appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA, eventB])
-      await appendEvents(serialization, this.pgClient, typeA, instanceB, 0, [eventC, eventD])
+  describe('with multiple non-empty streams', () => {
+    beforeEach(async () => {
+      await appendEvents(serialization, pgHelper.client, typeA, instanceA, 0, [eventA, eventB])
+      await appendEvents(serialization, pgHelper.client, typeA, instanceB, 0, [eventC, eventD])
     })
 
-    it('should return events for all streams', async function () {
+    it('should return events for all streams', async () => {
       const expected = [eventA, eventB, eventC, eventD]
 
       await consumeAsyncIterable(
-        readEventsContinuously(serialization, this.pgClient),
+        readEventsContinuously(serialization, pgHelper.client),
         expected.length,
         events => events.cancel(),
-        ({event}) => expect(event).to.deep.equal(expected.shift()),
+        ({event}) => expect(event).toEqual(expected.shift()),
       )
     })
   })
-}))
+})

@@ -1,13 +1,17 @@
-const {expect} = require('chai')
-
-const {asyncIterableToArray, pgSpec} = require('../helper.js')
-
+const {asyncIterableToArray} = require('../helper/async.js')
 const {createCommandHandler} = require('../../src/command-handler.js')
+const {createTestHelper} = require('../helper/pg.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {readEventsByStream} = require('../../src/event.js')
 const {serialization} = require('../../src/serialization/json.js')
 
-describe('handleCommand()', pgSpec(function () {
+describe('handleCommand()', () => {
+  const pgHelper = createTestHelper()
+
+  beforeEach(async () => {
+    await initializeSchema(pgHelper.client)
+  })
+
   const aggregateNameA = 'aggregate-name-a'
   const aggregateNameB = 'aggregate-name-b'
   const aggregateStreamA = `aggregate.${aggregateNameA}`
@@ -36,30 +40,30 @@ describe('handleCommand()', pgSpec(function () {
     handleCommand: () => {},
   }
 
-  beforeEach(async function () {
-    await initializeSchema(this.pgClient)
+  beforeEach(async () => {
+    await initializeSchema(pgHelper.client)
   })
 
-  context('when creating', function () {
-    it('should throw when the serialization is not supplied', async function () {
+  describe('when creating', () => {
+    it('should throw when the serialization is not supplied', async () => {
       const operation = () => createCommandHandler()
 
-      expect(operation).to.throw('Invalid serialization')
+      expect(operation).toThrow('Invalid serialization')
     })
 
-    it('should throw when aggregates are not supplied', async function () {
+    it('should throw when aggregates are not supplied', async () => {
       const operation = () => createCommandHandler(serialization)
 
-      expect(operation).to.throw('Invalid aggregates')
+      expect(operation).toThrow('Invalid aggregates')
     })
 
-    it('should throw when integrations are not supplied', async function () {
+    it('should throw when integrations are not supplied', async () => {
       const operation = () => createCommandHandler(serialization, {})
 
-      expect(operation).to.throw('Invalid integrations')
+      expect(operation).toThrow('Invalid integrations')
     })
 
-    it('should throw when multiple aggregates attempt to handle the same command type', async function () {
+    it('should throw when multiple aggregates attempt to handle the same command type', async () => {
       const operation = () => createCommandHandler(
         serialization,
         {
@@ -76,10 +80,10 @@ describe('handleCommand()', pgSpec(function () {
         {},
       )
 
-      expect(operation).to.throw('already handled')
+      expect(operation).toThrow('already handled')
     })
 
-    it('should throw when multiple integrations attempt to handle the same command type', async function () {
+    it('should throw when multiple integrations attempt to handle the same command type', async () => {
       const operation = () => createCommandHandler(
         serialization,
         {
@@ -96,10 +100,10 @@ describe('handleCommand()', pgSpec(function () {
         },
       )
 
-      expect(operation).to.throw('already handled')
+      expect(operation).toThrow('already handled')
     })
 
-    it('should throw when aggregates and integrations attempt to handle the same command type', async function () {
+    it('should throw when aggregates and integrations attempt to handle the same command type', async () => {
       const operation = () => createCommandHandler(
         serialization,
         {},
@@ -116,12 +120,12 @@ describe('handleCommand()', pgSpec(function () {
         },
       )
 
-      expect(operation).to.throw('already handled')
+      expect(operation).toThrow('already handled')
     })
   })
 
-  context('when handling commands', function () {
-    it('should throw when handling commands with unexpected types', async function () {
+  describe('when handling commands', () => {
+    it('should throw when handling commands with unexpected types', async () => {
       const handleCommand = createCommandHandler(
         serialization,
         {
@@ -132,14 +136,14 @@ describe('handleCommand()', pgSpec(function () {
         },
       )
 
-      const operation = this.inTransaction(async () => {
-        await handleCommand(this.pgClient, {type: commandTypeA})
+      const operation = pgHelper.inTransaction(async () => {
+        await handleCommand(pgHelper.client, {type: commandTypeA})
       })
 
-      await expect(operation).to.be.rejectedWith(`Unable to handle ${commandTypeA} command - no suitable handler found`)
+      await expect(operation).rejects.toThrow(`Unable to handle ${commandTypeA} command - no suitable handler found`)
     })
 
-    it('should throw when handling commands that cannot be routed', async function () {
+    it('should throw when handling commands that cannot be routed', async () => {
       const handleCommand = createCommandHandler(
         serialization,
         {
@@ -151,16 +155,16 @@ describe('handleCommand()', pgSpec(function () {
         {},
       )
 
-      const operation = this.inTransaction(async () => {
-        await handleCommand(this.pgClient, {type: commandTypeA})
+      const operation = pgHelper.inTransaction(async () => {
+        await handleCommand(pgHelper.client, {type: commandTypeA})
       })
 
-      await expect(operation).to.be.rejectedWith(`Unable to handle ${commandTypeA} command - no suitable route found`)
+      await expect(operation).rejects.toThrow(`Unable to handle ${commandTypeA} command - no suitable route found`)
     })
   })
 
-  context('when handling commands with aggregates', function () {
-    it('should be able to handle commands', async function () {
+  describe('when handling commands with aggregates', () => {
+    it('should be able to handle commands', async () => {
       const createCommandA = increment => ({type: commandTypeA, data: {increment}})
       const createCommandB = increment => ({type: commandTypeB, data: {increment}})
       const instance = 'aggregate-instance-a'
@@ -195,23 +199,23 @@ describe('handleCommand()', pgSpec(function () {
       )
 
       const isHandled = []
-      await this.inTransaction(async () => {
-        isHandled.push(await handleCommand(this.pgClient, createCommandA(111)))
-        isHandled.push(await handleCommand(this.pgClient, createCommandA(222)))
-        isHandled.push(await handleCommand(this.pgClient, createCommandB(333)))
+      await pgHelper.inTransaction(async () => {
+        isHandled.push(await handleCommand(pgHelper.client, createCommandA(111)))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandA(222)))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandB(333)))
       })
 
       const [events] =
-        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instance))
+        await asyncIterableToArray(readEventsByStream(serialization, pgHelper.client, aggregateStreamA, instance))
 
-      expect(isHandled).to.deep.equal([true, true, true])
-      expect(events).to.have.length(3)
-      expect(events[0].event).to.deep.equal({type: eventTypeA, data: {current: 0, increment: 111}})
-      expect(events[1].event).to.deep.equal({type: eventTypeA, data: {current: 111, increment: 222}})
-      expect(events[2].event).to.deep.equal({type: eventTypeB, data: {current: 0, increment: 333}})
+      expect(isHandled).toEqual([true, true, true])
+      expect(events).toHaveLength(3)
+      expect(events[0].event).toEqual({type: eventTypeA, data: {current: 0, increment: 111}})
+      expect(events[1].event).toEqual({type: eventTypeA, data: {current: 111, increment: 222}})
+      expect(events[2].event).toEqual({type: eventTypeB, data: {current: 0, increment: 333}})
     })
 
-    it('should immediately apply recorded events to the state', async function () {
+    it('should immediately apply recorded events to the state', async () => {
       const createCommandA = () => ({type: commandTypeA})
       const instance = 'aggregate-instance-a'
       const handleCommand = createCommandHandler(
@@ -242,17 +246,17 @@ describe('handleCommand()', pgSpec(function () {
         {},
       )
 
-      const isHandled = await this.inTransaction(async () => handleCommand(this.pgClient, createCommandA()))
+      const isHandled = await pgHelper.inTransaction(async () => handleCommand(pgHelper.client, createCommandA()))
       const [events] =
-        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instance))
+        await asyncIterableToArray(readEventsByStream(serialization, pgHelper.client, aggregateStreamA, instance))
 
-      expect(isHandled).to.be.true()
-      expect(events).to.have.length(2)
-      expect(events[0].event).to.deep.equal({type: eventTypeA, data: {value: 111}})
-      expect(events[1].event).to.deep.equal({type: eventTypeA, data: {value: 222}})
+      expect(isHandled).toBe(true)
+      expect(events).toHaveLength(2)
+      expect(events[0].event).toEqual({type: eventTypeA, data: {value: 111}})
+      expect(events[1].event).toEqual({type: eventTypeA, data: {value: 222}})
     })
 
-    it('should not allow failures to affect the state for future calls', async function () {
+    it('should not allow failures to affect the state for future calls', async () => {
       const createCommandA = isOkay => ({type: commandTypeA, data: {isOkay}})
       const instance = 'aggregate-instance-a'
       const notOkay = new Error('Not okay')
@@ -283,24 +287,24 @@ describe('handleCommand()', pgSpec(function () {
 
       const isHandled = []
       let error
-      isHandled.push(await this.inTransaction(async () => handleCommand(this.pgClient, createCommandA(true))))
+      isHandled.push(await pgHelper.inTransaction(async () => handleCommand(pgHelper.client, createCommandA(true))))
       try {
-        await this.inTransaction(async () => handleCommand(this.pgClient, createCommandA(false)))
+        await pgHelper.inTransaction(async () => handleCommand(pgHelper.client, createCommandA(false)))
       } catch (e) {
         error = e
       }
-      isHandled.push(await this.inTransaction(async () => handleCommand(this.pgClient, createCommandA(true))))
+      isHandled.push(await pgHelper.inTransaction(async () => handleCommand(pgHelper.client, createCommandA(true))))
       const [events] =
-        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instance))
+        await asyncIterableToArray(readEventsByStream(serialization, pgHelper.client, aggregateStreamA, instance))
 
-      expect(isHandled).to.deep.equal([true, true])
-      expect(error).to.equal(notOkay)
-      expect(events).to.have.length(2)
-      expect(events[0].event).to.deep.equal({type: eventTypeA, data: {value: 111}})
-      expect(events[1].event).to.deep.equal({type: eventTypeA, data: {value: 222}})
+      expect(isHandled).toEqual([true, true])
+      expect(error).toBe(notOkay)
+      expect(events).toHaveLength(2)
+      expect(events[0].event).toEqual({type: eventTypeA, data: {value: 111}})
+      expect(events[1].event).toEqual({type: eventTypeA, data: {value: 222}})
     })
 
-    it('should be able to route to instances on a per-command basis', async function () {
+    it('should be able to route to instances on a per-command basis', async () => {
       const createCommandA = (instance, increment) => ({type: commandTypeA, data: {instance, increment}})
       const instanceA = 'aggregate-instance-a'
       const instanceB = 'aggregate-instance-b'
@@ -328,28 +332,28 @@ describe('handleCommand()', pgSpec(function () {
       )
 
       const isHandled = []
-      await this.inTransaction(async () => {
-        isHandled.push(await handleCommand(this.pgClient, createCommandA(instanceA, 111)))
-        isHandled.push(await handleCommand(this.pgClient, createCommandA(instanceB, 222)))
-        isHandled.push(await handleCommand(this.pgClient, createCommandA(instanceA, 333)))
-        isHandled.push(await handleCommand(this.pgClient, createCommandA(instanceB, 444)))
+      await pgHelper.inTransaction(async () => {
+        isHandled.push(await handleCommand(pgHelper.client, createCommandA(instanceA, 111)))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandA(instanceB, 222)))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandA(instanceA, 333)))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandA(instanceB, 444)))
       })
 
       const [eventsA] =
-        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instanceA))
+        await asyncIterableToArray(readEventsByStream(serialization, pgHelper.client, aggregateStreamA, instanceA))
       const [eventsB] =
-        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instanceB))
+        await asyncIterableToArray(readEventsByStream(serialization, pgHelper.client, aggregateStreamA, instanceB))
 
-      expect(isHandled).to.deep.equal([true, true, true, true])
-      expect(eventsA).to.have.length(2)
-      expect(eventsA[0].event).to.deep.equal({type: eventTypeA, data: {current: 0, increment: 111}})
-      expect(eventsA[1].event).to.deep.equal({type: eventTypeA, data: {current: 111, increment: 333}})
-      expect(eventsB).to.have.length(2)
-      expect(eventsB[0].event).to.deep.equal({type: eventTypeA, data: {current: 0, increment: 222}})
-      expect(eventsB[1].event).to.deep.equal({type: eventTypeA, data: {current: 222, increment: 444}})
+      expect(isHandled).toEqual([true, true, true, true])
+      expect(eventsA).toHaveLength(2)
+      expect(eventsA[0].event).toEqual({type: eventTypeA, data: {current: 0, increment: 111}})
+      expect(eventsA[1].event).toEqual({type: eventTypeA, data: {current: 111, increment: 333}})
+      expect(eventsB).toHaveLength(2)
+      expect(eventsB[0].event).toEqual({type: eventTypeA, data: {current: 0, increment: 222}})
+      expect(eventsB[1].event).toEqual({type: eventTypeA, data: {current: 222, increment: 444}})
     })
 
-    it('should support multiple handlers', async function () {
+    it('should support multiple handlers', async () => {
       const createCommandA = () => ({type: commandTypeA})
       const createCommandB = () => ({type: commandTypeB})
       const instanceA = 'aggregate-instance-a'
@@ -387,28 +391,28 @@ describe('handleCommand()', pgSpec(function () {
       )
 
       const isHandled = []
-      await this.inTransaction(async () => {
-        isHandled.push(await handleCommand(this.pgClient, createCommandA()))
-        isHandled.push(await handleCommand(this.pgClient, createCommandB()))
-        isHandled.push(await handleCommand(this.pgClient, createCommandA()))
-        isHandled.push(await handleCommand(this.pgClient, createCommandB()))
+      await pgHelper.inTransaction(async () => {
+        isHandled.push(await handleCommand(pgHelper.client, createCommandA()))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandB()))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandA()))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandB()))
       })
 
       const [eventsA] =
-        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamA, instanceA))
+        await asyncIterableToArray(readEventsByStream(serialization, pgHelper.client, aggregateStreamA, instanceA))
       const [eventsB] =
-        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, aggregateStreamB, instanceB))
+        await asyncIterableToArray(readEventsByStream(serialization, pgHelper.client, aggregateStreamB, instanceB))
 
-      expect(isHandled).to.deep.equal([true, true, true, true])
-      expect(eventsA).to.have.length(2)
-      expect(eventsA[0].event).to.deep.equal({type: eventTypeA, data: 0})
-      expect(eventsA[1].event).to.deep.equal({type: eventTypeA, data: 1})
-      expect(eventsB).to.have.length(2)
-      expect(eventsB[0].event).to.deep.equal({type: eventTypeA, data: 0})
-      expect(eventsB[1].event).to.deep.equal({type: eventTypeA, data: 1})
+      expect(isHandled).toEqual([true, true, true, true])
+      expect(eventsA).toHaveLength(2)
+      expect(eventsA[0].event).toEqual({type: eventTypeA, data: 0})
+      expect(eventsA[1].event).toEqual({type: eventTypeA, data: 1})
+      expect(eventsB).toHaveLength(2)
+      expect(eventsB[0].event).toEqual({type: eventTypeA, data: 0})
+      expect(eventsB[1].event).toEqual({type: eventTypeA, data: 1})
     })
 
-    it('should throw when recording events with unexpected types', async function () {
+    it('should throw when recording events with unexpected types', async () => {
       const handleCommand = createCommandHandler(
         serialization,
         {
@@ -422,16 +426,16 @@ describe('handleCommand()', pgSpec(function () {
         {},
       )
 
-      const operation = this.inTransaction(async () => {
-        await handleCommand(this.pgClient, {type: commandTypeA})
+      const operation = pgHelper.inTransaction(async () => {
+        await handleCommand(pgHelper.client, {type: commandTypeA})
       })
 
-      await expect(operation).to.be.rejectedWith(`Aggregate ${aggregateNameA} cannot record ${eventTypeA} events`)
+      await expect(operation).rejects.toThrow(`Aggregate ${aggregateNameA} cannot record ${eventTypeA} events`)
     })
   })
 
-  context('when handling commands with integrations', function () {
-    it('should be able to handle commands', async function () {
+  describe('when handling commands with integrations', () => {
+    it('should be able to handle commands', async () => {
       const createCommandA = data => ({type: commandTypeA, data})
       const createCommandB = data => ({type: commandTypeB, data})
       const handleCommand = createCommandHandler(
@@ -454,23 +458,23 @@ describe('handleCommand()', pgSpec(function () {
       )
 
       const isHandled = []
-      await this.inTransaction(async () => {
-        isHandled.push(await handleCommand(this.pgClient, createCommandA(111)))
-        isHandled.push(await handleCommand(this.pgClient, createCommandA(222)))
-        isHandled.push(await handleCommand(this.pgClient, createCommandB(333)))
+      await pgHelper.inTransaction(async () => {
+        isHandled.push(await handleCommand(pgHelper.client, createCommandA(111)))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandA(222)))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandB(333)))
       })
 
       const [events] =
-        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, integrationStreamA, ''))
+        await asyncIterableToArray(readEventsByStream(serialization, pgHelper.client, integrationStreamA, ''))
 
-      expect(isHandled).to.deep.equal([true, true, true])
-      expect(events).to.have.length(3)
-      expect(events[0].event).to.deep.equal({type: eventTypeA, data: 111})
-      expect(events[1].event).to.deep.equal({type: eventTypeA, data: 222})
-      expect(events[2].event).to.deep.equal({type: eventTypeB, data: 333})
+      expect(isHandled).toEqual([true, true, true])
+      expect(events).toHaveLength(3)
+      expect(events[0].event).toEqual({type: eventTypeA, data: 111})
+      expect(events[1].event).toEqual({type: eventTypeA, data: 222})
+      expect(events[2].event).toEqual({type: eventTypeB, data: 333})
     })
 
-    it('should support multiple handlers', async function () {
+    it('should support multiple handlers', async () => {
       const createCommandA = data => ({type: commandTypeA, data})
       const createCommandB = data => ({type: commandTypeB, data})
       const handleCommand = createCommandHandler(
@@ -498,28 +502,28 @@ describe('handleCommand()', pgSpec(function () {
       )
 
       const isHandled = []
-      await this.inTransaction(async () => {
-        isHandled.push(await handleCommand(this.pgClient, createCommandA(111)))
-        isHandled.push(await handleCommand(this.pgClient, createCommandB(222)))
-        isHandled.push(await handleCommand(this.pgClient, createCommandA(333)))
-        isHandled.push(await handleCommand(this.pgClient, createCommandB(444)))
+      await pgHelper.inTransaction(async () => {
+        isHandled.push(await handleCommand(pgHelper.client, createCommandA(111)))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandB(222)))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandA(333)))
+        isHandled.push(await handleCommand(pgHelper.client, createCommandB(444)))
       })
 
       const [eventsA] =
-        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, integrationStreamA, ''))
+        await asyncIterableToArray(readEventsByStream(serialization, pgHelper.client, integrationStreamA, ''))
       const [eventsB] =
-        await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, integrationStreamB, ''))
+        await asyncIterableToArray(readEventsByStream(serialization, pgHelper.client, integrationStreamB, ''))
 
-      expect(isHandled).to.deep.equal([true, true, true, true])
-      expect(eventsA).to.have.length(2)
-      expect(eventsA[0].event).to.deep.equal({type: eventTypeA, data: 111})
-      expect(eventsA[1].event).to.deep.equal({type: eventTypeA, data: 333})
-      expect(eventsB).to.have.length(2)
-      expect(eventsB[0].event).to.deep.equal({type: eventTypeA, data: 222})
-      expect(eventsB[1].event).to.deep.equal({type: eventTypeA, data: 444})
+      expect(isHandled).toEqual([true, true, true, true])
+      expect(eventsA).toHaveLength(2)
+      expect(eventsA[0].event).toEqual({type: eventTypeA, data: 111})
+      expect(eventsA[1].event).toEqual({type: eventTypeA, data: 333})
+      expect(eventsB).toHaveLength(2)
+      expect(eventsB[0].event).toEqual({type: eventTypeA, data: 222})
+      expect(eventsB[1].event).toEqual({type: eventTypeA, data: 444})
     })
 
-    it('should throw when recording events with unexpected types', async function () {
+    it('should throw when recording events with unexpected types', async () => {
       const handleCommand = createCommandHandler(
         serialization,
         {},
@@ -533,11 +537,11 @@ describe('handleCommand()', pgSpec(function () {
         {},
       )
 
-      const operation = this.inTransaction(async () => {
-        await handleCommand(this.pgClient, {type: commandTypeA})
+      const operation = pgHelper.inTransaction(async () => {
+        await handleCommand(pgHelper.client, {type: commandTypeA})
       })
 
-      await expect(operation).to.be.rejectedWith(`Integration ${integrationNameA} cannot record ${eventTypeA} events`)
+      await expect(operation).rejects.toThrow(`Integration ${integrationNameA} cannot record ${eventTypeA} events`)
     })
   })
-}))
+})

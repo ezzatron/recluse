@@ -12,29 +12,15 @@
     "winston": "^3.2.1"
   },
   "devDependencies": {
-    "chai": "^4.2.0",
-    "chai-as-promised": "^7.1.1",
-    "chai-bytes": "^0.1.2",
-    "dirty-chai": "^2.0.1",
     "eslint": "^6.8.0",
     "eslint-config-standard": "^14.1.0",
     "eslint-plugin-import": "^2.16.0",
-    "eslint-plugin-mocha": "^6.2.2",
+    "eslint-plugin-jest": "^23.7.0",
     "eslint-plugin-node": "^11.0.0",
     "eslint-plugin-promise": "^4.1.1",
     "eslint-plugin-standard": "^4.0.0",
-    "mocha": "^7.0.1",
-    "nyc": "^15.0.0",
-    "sinon": "^8.1.1",
-    "sinon-chai": "^3.3.0",
+    "jest": "^25.1.0",
+    "jest-extended": "^0.11.5",
     "uuid": "^3.3.2"
-  },
-  "scripts": {
-    "ci-lint": "eslint .",
-    "coverage": "nyc mocha test/suite/**/*.spec.js",
-    "coverage-open": "open artifacts/tests/coverage/html/index.html",
-    "lint": "eslint --fix .",
-    "pre-commit": "yarn test && yarn ci-lint",
-    "test": "mocha test/suite/**/*.spec.js"
   }
 }

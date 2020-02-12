@@ -1,284 +1,283 @@
-const {expect} = require('chai')
-const {spy} = require('sinon')
-
 const {createStateController} = require('../../src/state.js')
 const {serialization: {copy}} = require('../../src/serialization/json.js')
 
-describe('createStateController()', function () {
+describe('createStateController()', () => {
   const increment = async state => { state.number++ }
   const nest = async state => ({state})
   const destroy = async () => null
   const error = new Error('You done goofed')
   const explode = () => { throw error }
 
-  beforeEach(function () {
-    this.init = {number: 0}
-    this.read = spy(async () => this.init)
+  let controller, draftState, init, read, state
 
-    this.controller = createStateController(copy, this.read)
+  beforeEach(() => {
+    init = {number: 0}
+    read = jest.fn(async () => init)
+
+    controller = createStateController(copy, read)
   })
 
-  context('when the state has not been read', function () {
-    it('should not be flagged as needing an update', function () {
-      expect(this.controller.isUpdated()).to.be.false()
+  describe('when the state has not been read', () => {
+    it('should not be flagged as needing an update', () => {
+      expect(controller.isUpdated()).toBe(false)
     })
 
-    describe('getState()', function () {
-      it('should be able to return the state', async function () {
-        expect(await this.controller.readState()).to.deep.equal(this.init)
-      })
-    })
-
-    describe('readState()', function () {
-      it('should be able to read the state', async function () {
-        expect(await this.controller.readState()).to.deep.equal(this.init)
-      })
-
-      it('should return a copy of the state', async function () {
-        expect(await this.controller.readState()).to.not.equal(this.init)
+    describe('getState()', () => {
+      it('should be able to return the state', async () => {
+        expect(await controller.readState()).toEqual(init)
       })
     })
 
-    describe('updateState()', function () {
-      it('should be able to update the state by mutation', async function () {
-        await this.controller.updateState(increment)
-
-        expect(await this.controller.readState()).to.deep.equal({number: 1})
+    describe('readState()', () => {
+      it('should be able to read the state', async () => {
+        expect(await controller.readState()).toEqual(init)
       })
 
-      it('should be able to replace the state by supplying a new state', async function () {
-        await this.controller.updateState({x: 'y'})
-
-        expect(await this.controller.readState()).to.deep.equal({x: 'y'})
-      })
-
-      it('should be able to replace the state with null by supplying null', async function () {
-        await this.controller.updateState(null)
-
-        expect(await this.controller.readState()).to.be.null()
-      })
-
-      it('should be able to replace the state by returning a new state', async function () {
-        await this.controller.updateState(nest)
-
-        expect(await this.controller.readState()).to.deep.equal({state: this.init})
-      })
-
-      it('should be able to replace the state with null by returning null', async function () {
-        await this.controller.updateState(destroy)
-
-        expect(await this.controller.readState()).to.be.null()
-      })
-
-      it('should not update the state if the update operation throws', async function () {
-        await expect(this.controller.updateState(explode)).to.be.rejectedWith(error)
-        expect(await this.controller.readState()).to.deep.equal(this.init)
-      })
-    })
-  })
-
-  context('when the state has been read', function () {
-    beforeEach(async function () {
-      this.state = await this.controller.readState()
-    })
-
-    it('should not be flagged as needing an update', function () {
-      expect(this.controller.isUpdated()).to.be.false()
-    })
-
-    describe('getState()', function () {
-      it('should be able to return the state', async function () {
-        expect(await this.controller.readState()).to.deep.equal(this.init)
-      })
-
-      it('should not cause additional calls of the read callback', async function () {
-        await this.controller.getState()
-
-        expect(this.read).to.have.been.calledOnce()
+      it('should return a copy of the state', async () => {
+        expect(await controller.readState()).not.toBe(init)
       })
     })
 
-    describe('readState()', function () {
-      it('should be able to read the state', async function () {
-        expect(await this.controller.readState()).to.deep.equal(this.init)
+    describe('updateState()', () => {
+      it('should be able to update the state by mutation', async () => {
+        await controller.updateState(increment)
+
+        expect(await controller.readState()).toEqual({number: 1})
       })
 
-      it('should return a copy of the state', async function () {
-        expect(await this.controller.readState()).to.not.equal(this.init)
-        expect(await this.controller.readState()).to.not.equal(this.state)
+      it('should be able to replace the state by supplying a new state', async () => {
+        await controller.updateState({x: 'y'})
+
+        expect(await controller.readState()).toEqual({x: 'y'})
       })
 
-      it('should not cause additional calls of the read callback', async function () {
-        await this.controller.readState()
+      it('should be able to replace the state with null by supplying null', async () => {
+        await controller.updateState(null)
 
-        expect(this.read).to.have.been.calledOnce()
-      })
-    })
-
-    describe('updateState()', function () {
-      it('should be able to update the state by mutation', async function () {
-        await this.controller.updateState(increment)
-
-        expect(await this.controller.readState()).to.deep.equal({number: 1})
+        expect(await controller.readState()).toBeNull()
       })
 
-      it('should be able to replace the state by supplying a new state', async function () {
-        await this.controller.updateState({x: 'y'})
+      it('should be able to replace the state by returning a new state', async () => {
+        await controller.updateState(nest)
 
-        expect(await this.controller.readState()).to.deep.equal({x: 'y'})
+        expect(await controller.readState()).toEqual({state: init})
       })
 
-      it('should be able to replace the state with null by supplying null', async function () {
-        await this.controller.updateState(null)
+      it('should be able to replace the state with null by returning null', async () => {
+        await controller.updateState(destroy)
 
-        expect(await this.controller.readState()).to.be.null()
+        expect(await controller.readState()).toBeNull()
       })
 
-      it('should be able to replace the state by returning a new state', async function () {
-        await this.controller.updateState(nest)
-
-        expect(await this.controller.readState()).to.deep.equal({state: this.init})
-      })
-
-      it('should be able to replace the state with null by returning null', async function () {
-        await this.controller.updateState(destroy)
-
-        expect(await this.controller.readState()).to.be.null()
-      })
-
-      it('should not cause additional calls of the read callback', async function () {
-        await this.controller.updateState(null)
-
-        expect(this.read).to.have.been.calledOnce()
-      })
-
-      it('should not update the state if the update operation throws', async function () {
-        await expect(this.controller.updateState(explode)).to.be.rejectedWith(error)
-        expect(await this.controller.readState()).to.deep.equal(this.init)
+      it('should not update the state if the update operation throws', async () => {
+        await expect(controller.updateState(explode)).rejects.toThrow(error)
+        expect(await controller.readState()).toEqual(init)
       })
     })
   })
 
-  context('when the state has been updated', function () {
-    beforeEach(async function () {
-      await this.controller.updateState(increment)
-      this.state = await this.controller.readState()
+  describe('when the state has been read', () => {
+    beforeEach(async () => {
+      state = await controller.readState()
     })
 
-    it('should be flagged as needing an update', function () {
-      expect(this.controller.isUpdated()).to.be.true()
+    it('should not be flagged as needing an update', () => {
+      expect(controller.isUpdated()).toBe(false)
     })
 
-    describe('getState()', function () {
-      it('should be able to return the state', async function () {
-        expect(await this.controller.readState()).to.deep.equal(this.state)
+    describe('getState()', () => {
+      it('should be able to return the state', async () => {
+        expect(await controller.readState()).toEqual(init)
       })
 
-      it('should not cause additional calls of the read callback', async function () {
-        await this.controller.getState()
+      it('should not cause additional calls of the read callback', async () => {
+        await controller.getState()
 
-        expect(this.read).to.have.been.calledOnce()
-      })
-    })
-
-    describe('readState()', function () {
-      it('should be able to read the state', async function () {
-        expect(await this.controller.readState()).to.deep.equal(this.state)
-      })
-
-      it('should return a copy of the state', async function () {
-        expect(await this.controller.readState()).to.not.equal(this.state)
-      })
-
-      it('should not cause additional calls of the read callback', async function () {
-        await this.controller.readState()
-
-        expect(this.read).to.have.been.calledOnce()
+        expect(read).toHaveBeenCalledTimes(1)
       })
     })
 
-    describe('updateState()', function () {
-      it('should be able to update the state by mutation', async function () {
-        await this.controller.updateState(increment)
-
-        expect(await this.controller.readState()).to.deep.equal({number: 2})
+    describe('readState()', () => {
+      it('should be able to read the state', async () => {
+        expect(await controller.readState()).toEqual(init)
       })
 
-      it('should be able to replace the state by supplying a new state', async function () {
-        await this.controller.updateState({x: 'y'})
-
-        expect(await this.controller.readState()).to.deep.equal({x: 'y'})
+      it('should return a copy of the state', async () => {
+        expect(await controller.readState()).not.toBe(init)
+        expect(await controller.readState()).not.toBe(state)
       })
 
-      it('should be able to replace the state with null by supplying null', async function () {
-        await this.controller.updateState(null)
+      it('should not cause additional calls of the read callback', async () => {
+        await controller.readState()
 
-        expect(await this.controller.readState()).to.be.null()
+        expect(read).toHaveBeenCalledTimes(1)
+      })
+    })
+
+    describe('updateState()', () => {
+      it('should be able to update the state by mutation', async () => {
+        await controller.updateState(increment)
+
+        expect(await controller.readState()).toEqual({number: 1})
       })
 
-      it('should be able to replace the state by returning a new state', async function () {
-        await this.controller.updateState(nest)
+      it('should be able to replace the state by supplying a new state', async () => {
+        await controller.updateState({x: 'y'})
 
-        expect(await this.controller.readState()).to.deep.equal({state: this.state})
+        expect(await controller.readState()).toEqual({x: 'y'})
       })
 
-      it('should be able to replace the state with null by returning null', async function () {
-        await this.controller.updateState(destroy)
+      it('should be able to replace the state with null by supplying null', async () => {
+        await controller.updateState(null)
 
-        expect(await this.controller.readState()).to.be.null()
+        expect(await controller.readState()).toBeNull()
       })
 
-      it('should not cause additional calls of the read callback', async function () {
-        await this.controller.updateState(null)
+      it('should be able to replace the state by returning a new state', async () => {
+        await controller.updateState(nest)
 
-        expect(this.read).to.have.been.calledOnce()
+        expect(await controller.readState()).toEqual({state: init})
       })
 
-      it('should not update the state if the update operation throws', async function () {
-        await expect(this.controller.updateState(explode)).to.be.rejectedWith(error)
-        expect(await this.controller.readState()).to.deep.equal(this.state)
+      it('should be able to replace the state with null by returning null', async () => {
+        await controller.updateState(destroy)
+
+        expect(await controller.readState()).toBeNull()
+      })
+
+      it('should not cause additional calls of the read callback', async () => {
+        await controller.updateState(null)
+
+        expect(read).toHaveBeenCalledTimes(1)
+      })
+
+      it('should not update the state if the update operation throws', async () => {
+        await expect(controller.updateState(explode)).rejects.toThrow(error)
+        expect(await controller.readState()).toEqual(init)
       })
     })
   })
 
-  context('when the state has been updated by mutation', function () {
-    beforeEach(async function () {
-      await this.controller.updateState(state => {
+  describe('when the state has been updated', () => {
+    beforeEach(async () => {
+      await controller.updateState(increment)
+      state = await controller.readState()
+    })
+
+    it('should be flagged as needing an update', () => {
+      expect(controller.isUpdated()).toBe(true)
+    })
+
+    describe('getState()', () => {
+      it('should be able to return the state', async () => {
+        expect(await controller.readState()).toEqual(state)
+      })
+
+      it('should not cause additional calls of the read callback', async () => {
+        await controller.getState()
+
+        expect(read).toHaveBeenCalledTimes(1)
+      })
+    })
+
+    describe('readState()', () => {
+      it('should be able to read the state', async () => {
+        expect(await controller.readState()).toEqual(state)
+      })
+
+      it('should return a copy of the state', async () => {
+        expect(await controller.readState()).not.toBe(state)
+      })
+
+      it('should not cause additional calls of the read callback', async () => {
+        await controller.readState()
+
+        expect(read).toHaveBeenCalledTimes(1)
+      })
+    })
+
+    describe('updateState()', () => {
+      it('should be able to update the state by mutation', async () => {
+        await controller.updateState(increment)
+
+        expect(await controller.readState()).toEqual({number: 2})
+      })
+
+      it('should be able to replace the state by supplying a new state', async () => {
+        await controller.updateState({x: 'y'})
+
+        expect(await controller.readState()).toEqual({x: 'y'})
+      })
+
+      it('should be able to replace the state with null by supplying null', async () => {
+        await controller.updateState(null)
+
+        expect(await controller.readState()).toBeNull()
+      })
+
+      it('should be able to replace the state by returning a new state', async () => {
+        await controller.updateState(nest)
+
+        expect(await controller.readState()).toEqual({state})
+      })
+
+      it('should be able to replace the state with null by returning null', async () => {
+        await controller.updateState(destroy)
+
+        expect(await controller.readState()).toBeNull()
+      })
+
+      it('should not cause additional calls of the read callback', async () => {
+        await controller.updateState(null)
+
+        expect(read).toHaveBeenCalledTimes(1)
+      })
+
+      it('should not update the state if the update operation throws', async () => {
+        await expect(controller.updateState(explode)).rejects.toThrow(error)
+        expect(await controller.readState()).toEqual(state)
+      })
+    })
+  })
+
+  describe('when the state has been updated by mutation', () => {
+    beforeEach(async () => {
+      await controller.updateState(state => {
         ++state.number
-        this.draftState = state
+        draftState = state
       })
     })
 
-    it('should copy the supplied state to prevent mutations', async function () {
-      this.draftState.number = 'other'
+    it('should copy the supplied state to prevent mutations', async () => {
+      draftState.number = 'other'
 
-      expect(await this.controller.readState()).to.deep.equal({number: 1})
+      expect(await controller.readState()).toEqual({number: 1})
     })
   })
 
-  context('when the state has been updated by returning a new state', function () {
-    beforeEach(async function () {
-      this.state = {number: 111}
-      await this.controller.updateState(() => this.state)
+  describe('when the state has been updated by returning a new state', () => {
+    beforeEach(async () => {
+      state = {number: 111}
+      await controller.updateState(() => state)
     })
 
-    it('should copy the supplied state to prevent mutations', async function () {
-      this.state.number = 222
+    it('should copy the supplied state to prevent mutations', async () => {
+      state.number = 222
 
-      expect(await this.controller.readState()).to.deep.equal({number: 111})
+      expect(await controller.readState()).toEqual({number: 111})
     })
   })
 
-  context('when the state has been updated by supplying a new state', function () {
-    beforeEach(async function () {
-      this.state = {number: 111}
-      await this.controller.updateState(this.state)
+  describe('when the state has been updated by supplying a new state', () => {
+    beforeEach(async () => {
+      state = {number: 111}
+      await controller.updateState(state)
     })
 
-    it('should copy the supplied state to prevent mutations', async function () {
-      this.state.number = 222
+    it('should copy the supplied state to prevent mutations', async () => {
+      state.number = 222
 
-      expect(await this.controller.readState()).to.deep.equal({number: 111})
+      expect(await controller.readState()).toEqual({number: 111})
     })
   })
 })

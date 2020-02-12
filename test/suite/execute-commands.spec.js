@@ -1,14 +1,18 @@
-const {expect} = require('chai')
-
-const {asyncIterableToArray, pgSpec} = require('../helper.js')
-
+const {asyncIterableToArray} = require('../helper/async.js')
 const {COMMAND: CHANNEL} = require('../../src/channel.js')
+const {createTestHelper} = require('../helper/pg.js')
 const {executeCommands, readCommands} = require('../../src/command.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
 const {waitForNotification} = require('../../src/pg.js')
 
-describe('executeCommands()', pgSpec(function () {
+describe('executeCommands()', () => {
+  const pgHelper = createTestHelper()
+
+  beforeEach(async () => {
+    await initializeSchema(pgHelper.client)
+  })
+
   const sourceA = 'command-source-a'
   const commandTypeA = 'command-type-a'
   const commandTypeB = 'command-type-b'
@@ -17,68 +21,66 @@ describe('executeCommands()', pgSpec(function () {
   const commandC = {type: commandTypeA, data: 'c'}
   const commandD = {type: commandTypeB, data: 'd'}
 
-  beforeEach(async function () {
-    await initializeSchema(this.pgClient)
-  })
+  describe('with no commands', () => {
+    it('should be able to record commands', async () => {
+      await executeCommands(serialization, pgHelper.client, sourceA, [commandA, commandB])
+      const [commands] = await asyncIterableToArray(readCommands(serialization, pgHelper.client))
 
-  context('with no commands', function () {
-    it('should be able to record commands', async function () {
-      await executeCommands(serialization, this.pgClient, sourceA, [commandA, commandB])
-      const [commands] = await asyncIterableToArray(readCommands(serialization, this.pgClient))
-
-      expect(commands).to.have.length(2)
-      expect(commands[0].command).to.deep.equal(commandA)
-      expect(commands[1].command).to.deep.equal(commandB)
+      expect(commands).toHaveLength(2)
+      expect(commands[0].command).toEqual(commandA)
+      expect(commands[1].command).toEqual(commandB)
     })
 
-    it('should be able to record commands with null data', async function () {
+    it('should be able to record commands with null data', async () => {
       const command = {type: commandTypeA, data: null}
-      await executeCommands(serialization, this.pgClient, sourceA, [command])
-      const [commands] = await asyncIterableToArray(readCommands(serialization, this.pgClient))
+      await executeCommands(serialization, pgHelper.client, sourceA, [command])
+      const [commands] = await asyncIterableToArray(readCommands(serialization, pgHelper.client))
 
-      expect(commands).to.have.length(1)
-      expect(commands[0].command).to.deep.equal({type: commandTypeA, data: null})
+      expect(commands).toHaveLength(1)
+      expect(commands[0].command).toEqual({type: commandTypeA, data: null})
     })
 
-    it('should be able to record commands with undefined data', async function () {
+    it('should be able to record commands with undefined data', async () => {
       const command = {type: commandTypeA}
-      await executeCommands(serialization, this.pgClient, sourceA, [command])
-      const [commands] = await asyncIterableToArray(readCommands(serialization, this.pgClient))
+      await executeCommands(serialization, pgHelper.client, sourceA, [command])
+      const [commands] = await asyncIterableToArray(readCommands(serialization, pgHelper.client))
 
-      expect(commands).to.have.length(1)
-      expect(commands[0].command).to.deep.equal({type: commandTypeA, data: undefined})
+      expect(commands).toHaveLength(1)
+      expect(commands[0].command).toEqual({type: commandTypeA, data: undefined})
     })
   })
 
-  context('with existing commands', function () {
-    beforeEach(async function () {
-      await this.inTransaction(async () => executeCommands(serialization, this.pgClient, sourceA, [commandA, commandB]))
+  describe('with existing commands', () => {
+    beforeEach(async () => {
+      await pgHelper.inTransaction(async () => executeCommands(serialization, pgHelper.client, sourceA, [commandA, commandB]))
     })
 
-    it('should be able to record commands', async function () {
-      await executeCommands(serialization, this.pgClient, sourceA, [commandC, commandD])
-      const [commands] = await asyncIterableToArray(readCommands(serialization, this.pgClient, 2))
+    it('should be able to record commands', async () => {
+      await executeCommands(serialization, pgHelper.client, sourceA, [commandC, commandD])
+      const [commands] = await asyncIterableToArray(readCommands(serialization, pgHelper.client, 2))
 
-      expect(commands).to.have.length(2)
-      expect(commands[0].command).to.deep.equal(commandC)
-      expect(commands[1].command).to.deep.equal(commandD)
+      expect(commands).toHaveLength(2)
+      expect(commands[0].command).toEqual(commandC)
+      expect(commands[1].command).toEqual(commandD)
     })
   })
 
-  context('with other clients listening for commands', function () {
-    beforeEach(async function () {
-      this.secondaryPgClient = await this.createPgClient()
-      await this.secondaryPgClient.query(`LISTEN ${CHANNEL}`)
-      this.waitForCommand = waitForNotification(this.secondaryPgClient, CHANNEL)
+  describe('with other clients listening for commands', () => {
+    let secondaryPgClient, waitForCommand
+
+    beforeEach(async () => {
+      secondaryPgClient = await pgHelper.createClient()
+      await secondaryPgClient.query(`LISTEN ${CHANNEL}`)
+      waitForCommand = waitForNotification(secondaryPgClient, CHANNEL)
     })
 
-    it('should notify listening clients when recording commands', async function () {
+    it('should notify listening clients when recording commands', async () => {
       const [notification] = await Promise.all([
-        this.waitForCommand,
-        this.inTransaction(async () => executeCommands(serialization, this.pgClient, sourceA, [commandA])),
+        waitForCommand,
+        pgHelper.inTransaction(async () => executeCommands(serialization, pgHelper.client, sourceA, [commandA])),
       ])
 
-      expect(notification.channel).to.equal(CHANNEL)
+      expect(notification.channel).toBe(CHANNEL)
     })
   })
-}))
+})
