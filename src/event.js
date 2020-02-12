@@ -109,7 +109,7 @@ function readEventsContinuously (serialization, pgClient, options = {}) {
       marshal: marshal.bind(null, unserialize),
       start,
       timeout,
-    }
+    },
   )
 }
 
@@ -119,7 +119,7 @@ async function readNextStreamOffset (pgClient, type, instance) {
 
   const result = await pgClient.query(
     'SELECT next FROM recluse.stream WHERE type = $1 AND instance = $2',
-    [type, instance]
+    [type, instance],
   )
 
   if (result.rowCount < 1) return 0
@@ -132,7 +132,7 @@ async function insertEvent (serialize, pgClient, offset, streamId, streamOffset,
 
   await pgClient.query(
     'INSERT INTO recluse.event (global_offset, type, stream_id, stream_offset, data) VALUES ($1, $2, $3, $4, $5)',
-    [offset, type, streamId, streamOffset, serialize(data, EVENT, type)]
+    [offset, type, streamId, streamOffset, serialize(data, EVENT, type)],
   )
 }
 
@@ -142,7 +142,7 @@ async function insertStream (pgClient, type, instance, next) {
   try {
     result = await pgClient.query(
       'INSERT INTO recluse.stream (type, instance, next) VALUES ($1, $2, $3) RETURNING id',
-      [type, instance, next]
+      [type, instance, next],
     )
   } catch (error) {
     if (error.code === UNIQUE_VIOLATION) return [false, null]
@@ -156,7 +156,7 @@ async function insertStream (pgClient, type, instance, next) {
 async function updateStreamOffset (pgClient, type, instance, start, next) {
   const result = await pgClient.query(
     'UPDATE recluse.stream SET next = $1 WHERE type = $2 AND instance = $3 AND next = $4 RETURNING id',
-    [next, type, instance, start]
+    [next, type, instance, start],
   )
 
   return result.rowCount > 0 ? [true, result.rows[0].id] : [false, null]
@@ -169,7 +169,7 @@ async function updateStreamOffsetUnchecked (pgClient, type, instance, count) {
     ON CONFLICT (type, instance) DO UPDATE SET next = s.next + $3
     RETURNING id, next
     `,
-    [type, instance, count]
+    [type, instance, count],
   )
   const {id, next} = result.rows[0]
 
@@ -183,7 +183,7 @@ async function updateGlobalOffset (pgClient, count) {
     ON CONFLICT (id) DO UPDATE SET next = go.next + $1
     RETURNING next
     `,
-    [count]
+    [count],
   )
 
   return result.rows[0].next - count

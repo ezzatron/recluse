@@ -49,7 +49,7 @@ describe('readEventsContinuously()', pgSpec(function () {
         wrapper => {
           expect(wrapper).to.have.fields(expectedWrappers.shift())
           expect(wrapper.event).to.deep.equal(expected.shift())
-        }
+        },
       )
     })
 
@@ -68,7 +68,7 @@ describe('readEventsContinuously()', pgSpec(function () {
         wrapper => {
           expect(wrapper).to.have.fields(expectedWrappers.shift())
           expect(wrapper.event).to.deep.equal(expected.shift())
-        }
+        },
       )
     })
   })
@@ -86,7 +86,7 @@ describe('readEventsContinuously()', pgSpec(function () {
         readEventsContinuously(serialization, this.pgClient),
         expected.length,
         events => events.cancel(),
-        ({event}) => expect(event).to.deep.equal(expected.shift())
+        ({event}) => expect(event).to.deep.equal(expected.shift()),
       )
     })
   })

@@ -18,7 +18,7 @@ describe('allSerial()', function () {
           events.push('b start')
           await wait(0)
           events.push('b end')
-        }
+        },
       )
 
       expect(events).to.deep.equal([
@@ -34,7 +34,7 @@ describe('allSerial()', function () {
     it('should return an array of return values', async function () {
       const result = await allSerial(
         async () => 'a',
-        async () => 'b'
+        async () => 'b',
       )
 
       expect(result).to.deep.equal(['a', 'b'])

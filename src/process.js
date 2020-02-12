@@ -36,7 +36,7 @@ function maintainProcess (serialization, pgPool, name, process, options = {}) {
 
     const {getState, isUpdated, readState, updateState} = createStateController(
       copy,
-      async () => readProcessState(serialization, pgClient, name, processType, instance, createInitialState)
+      async () => readProcessState(serialization, pgClient, name, processType, instance, createInitialState),
     )
 
     await handleEvent({event, executeCommands, readState, updateState})
@@ -56,7 +56,7 @@ function maintainProcess (serialization, pgPool, name, process, options = {}) {
 async function readProcessState (serialization, pgClient, name, processType, instance, createInitialState) {
   const result = await pgClient.query(
     'SELECT state FROM recluse.process WHERE type = $1 AND instance = $2',
-    [processType, instance]
+    [processType, instance],
   )
 
   if (result.rowCount > 0) {
@@ -76,6 +76,6 @@ async function writeState (serialization, pgClient, name, processType, instance,
     INSERT INTO recluse.process (type, instance, state) VALUES ($1, $2, $3)
     ON CONFLICT (type, instance) DO UPDATE SET state = $3
     `,
-    [processType, instance, serialize(state, PROCESS, name)]
+    [processType, instance, serialize(state, PROCESS, name)],
   )
 }

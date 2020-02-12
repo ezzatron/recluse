@@ -11,7 +11,7 @@ module.exports = (chai, utils) => {
       'expected query to return #{exp} rows, but got #{act}',
       'expected query to not return #{act} rows',
       count,
-      subject.rowCount
+      subject.rowCount,
     )
   })
 

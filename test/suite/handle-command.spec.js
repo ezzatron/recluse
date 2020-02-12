@@ -73,7 +73,7 @@ describe('handleCommand()', pgSpec(function () {
             commandTypes: [commandTypeA],
           },
         },
-        {}
+        {},
       )
 
       expect(operation).to.throw('already handled')
@@ -93,7 +93,7 @@ describe('handleCommand()', pgSpec(function () {
             ...emptyIntegration,
             commandTypes: [commandTypeA],
           },
-        }
+        },
       )
 
       expect(operation).to.throw('already handled')
@@ -113,7 +113,7 @@ describe('handleCommand()', pgSpec(function () {
             ...emptyIntegration,
             commandTypes: [commandTypeA],
           },
-        }
+        },
       )
 
       expect(operation).to.throw('already handled')
@@ -129,7 +129,7 @@ describe('handleCommand()', pgSpec(function () {
         },
         {
           [integrationNameA]: emptyIntegration,
-        }
+        },
       )
 
       const operation = this.inTransaction(async () => {
@@ -148,7 +148,7 @@ describe('handleCommand()', pgSpec(function () {
             commandTypes: [commandTypeA],
           },
         },
-        {}
+        {},
       )
 
       const operation = this.inTransaction(async () => {
@@ -191,7 +191,7 @@ describe('handleCommand()', pgSpec(function () {
             },
           },
         },
-        {}
+        {},
       )
 
       const isHandled = []
@@ -239,7 +239,7 @@ describe('handleCommand()', pgSpec(function () {
             },
           },
         },
-        {}
+        {},
       )
 
       const isHandled = await this.inTransaction(async () => handleCommand(this.pgClient, createCommandA()))
@@ -278,7 +278,7 @@ describe('handleCommand()', pgSpec(function () {
             },
           },
         },
-        {}
+        {},
       )
 
       const isHandled = []
@@ -324,7 +324,7 @@ describe('handleCommand()', pgSpec(function () {
             },
           },
         },
-        {}
+        {},
       )
 
       const isHandled = []
@@ -383,7 +383,7 @@ describe('handleCommand()', pgSpec(function () {
             applyEvent: async ({updateState}) => updateState(state => ++state),
           },
         },
-        {}
+        {},
       )
 
       const isHandled = []
@@ -419,7 +419,7 @@ describe('handleCommand()', pgSpec(function () {
             handleCommand: async ({recordEvents}) => recordEvents({type: eventTypeA}),
           },
         },
-        {}
+        {},
       )
 
       const operation = this.inTransaction(async () => {
@@ -450,7 +450,7 @@ describe('handleCommand()', pgSpec(function () {
               }
             },
           },
-        }
+        },
       )
 
       const isHandled = []
@@ -494,7 +494,7 @@ describe('handleCommand()', pgSpec(function () {
               await recordEvents({type: eventTypeA, data})
             },
           },
-        }
+        },
       )
 
       const isHandled = []
@@ -530,7 +530,7 @@ describe('handleCommand()', pgSpec(function () {
             handleCommand: async ({recordEvents}) => recordEvents({type: eventTypeA}),
           },
         },
-        {}
+        {},
       )
 
       const operation = this.inTransaction(async () => {

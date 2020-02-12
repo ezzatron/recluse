@@ -45,7 +45,7 @@ describe('readUnhandledCommandsContinuously()', pgSpec(function () {
         wrapper => {
           expect(wrapper).to.have.fields(expectedWrappers.shift())
           expect(wrapper.command).to.deep.equal(expected.shift())
-        }
+        },
       )
     })
   })
@@ -71,7 +71,7 @@ describe('readUnhandledCommandsContinuously()', pgSpec(function () {
         wrapper => {
           expect(wrapper).to.have.fields(expectedWrappers.shift())
           expect(wrapper.command).to.deep.equal(expected.shift())
-        }
+        },
       )
     })
   })

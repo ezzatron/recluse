@@ -69,7 +69,7 @@ describe('readCommands()', pgSpec(function () {
         readCommands(serialization, this.pgClient),
         1,
         commands => commands.cancel(),
-        command => expect(command).to.exist()
+        command => expect(command).to.exist(),
       )
     })
   })

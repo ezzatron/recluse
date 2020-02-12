@@ -3,7 +3,7 @@ module.exports = {
 }
 
 async function initializeSchema (pgClient) {
-  await pgClient.query(`CREATE SCHEMA IF NOT EXISTS bank`)
+  await pgClient.query('CREATE SCHEMA IF NOT EXISTS bank')
 
   await pgClient.query(`
     CREATE TABLE IF NOT EXISTS bank.account
@@ -20,9 +20,9 @@ async function initializeSchema (pgClient) {
       PRIMARY KEY (id)
     )
   `)
-  await pgClient.query(`CREATE INDEX IF NOT EXISTS name_idx ON bank.account (name)`)
-  await pgClient.query(`CREATE INDEX IF NOT EXISTS balance_idx ON bank.account (balance)`)
-  await pgClient.query(`CREATE INDEX IF NOT EXISTS pending_balance_idx ON bank.account (pending_balance)`)
+  await pgClient.query('CREATE INDEX IF NOT EXISTS name_idx ON bank.account (name)')
+  await pgClient.query('CREATE INDEX IF NOT EXISTS balance_idx ON bank.account (balance)')
+  await pgClient.query('CREATE INDEX IF NOT EXISTS pending_balance_idx ON bank.account (pending_balance)')
 
   await pgClient.query(`
     CREATE TABLE IF NOT EXISTS bank.transaction
@@ -37,9 +37,9 @@ async function initializeSchema (pgClient) {
       PRIMARY KEY (id)
     )
   `)
-  await pgClient.query(`CREATE INDEX IF NOT EXISTS type_idx ON bank.transaction (type)`)
-  await pgClient.query(`CREATE INDEX IF NOT EXISTS status_idx ON bank.transaction (status)`)
-  await pgClient.query(`CREATE INDEX IF NOT EXISTS amount_idx ON bank.transaction (amount)`)
-  await pgClient.query(`CREATE INDEX IF NOT EXISTS to_idx ON bank.transaction (to_id, from_id)`)
-  await pgClient.query(`CREATE INDEX IF NOT EXISTS from_idx ON bank.transaction (from_id, to_id)`)
+  await pgClient.query('CREATE INDEX IF NOT EXISTS type_idx ON bank.transaction (type)')
+  await pgClient.query('CREATE INDEX IF NOT EXISTS status_idx ON bank.transaction (status)')
+  await pgClient.query('CREATE INDEX IF NOT EXISTS amount_idx ON bank.transaction (amount)')
+  await pgClient.query('CREATE INDEX IF NOT EXISTS to_idx ON bank.transaction (to_id, from_id)')
+  await pgClient.query('CREATE INDEX IF NOT EXISTS from_idx ON bank.transaction (from_id, to_id)')
 }

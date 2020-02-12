@@ -65,7 +65,7 @@ function createRun (spec) {
         serialization,
         pgPool,
         createCommandHandler(serialization, aggregates, integrations),
-        maintainOptions
+        maintainOptions,
       ),
     ]
 
@@ -96,7 +96,7 @@ function createRun (spec) {
         logger.debug(
           typeof result === 'undefined'
             ? `Iterated ${type}`
-            : `Iterated ${type}: ${JSON.stringify(result)}`
+            : `Iterated ${type}: ${JSON.stringify(result)}`,
         )
       }
     })
@@ -113,7 +113,7 @@ function createRun (spec) {
 
     Promise.all(runners).then(
       () => die(0, 'Stopping'),
-      error => die(1, `Stopping: ${error.stack}`)
+      error => die(1, `Stopping: ${error.stack}`),
     )
 
     return function stop () {

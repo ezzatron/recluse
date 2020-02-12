@@ -102,7 +102,7 @@ async function commandHandled (pgClient, wrapper) {
 
   return pgClient.query(
     'UPDATE recluse.command SET handled_at = now() WHERE id = $1',
-    [id]
+    [id],
   )
 }
 
@@ -135,6 +135,6 @@ function addTypeMappingEntry (index, type, entry) {
 
   throw new Error(
     `Commands of type ${type} are already handled by the ${existingName} ${existingHandlerType}, ` +
-    `and cannot be handled by the ${entryName} ${entryHandlerType}`
+    `and cannot be handled by the ${entryName} ${entryHandlerType}`,
   )
 }

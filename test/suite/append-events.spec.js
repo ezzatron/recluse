@@ -26,7 +26,7 @@ describe('appendEvents()', pgSpec(function () {
   context('with a new stream', function () {
     it('should be able to append to the stream', async function () {
       const wasAppended = await this.inTransaction(
-        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA, eventB])
+        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA, eventB]),
       )
       const [events] = await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, typeA, instanceA))
 
@@ -39,7 +39,7 @@ describe('appendEvents()', pgSpec(function () {
     it('should be able to append events with null data', async function () {
       const event = {type: eventTypeA, data: null}
       const wasAppended = await this.inTransaction(
-        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [event])
+        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [event]),
       )
       const [events] = await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, typeA, instanceA))
 
@@ -63,13 +63,13 @@ describe('appendEvents()', pgSpec(function () {
   context('with an existing stream', function () {
     beforeEach(async function () {
       await this.inTransaction(
-        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA, eventB])
+        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA, eventB]),
       )
     })
 
     it('should be able to append to the stream', async function () {
       const wasAppended = await this.inTransaction(
-        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 2, [eventC, eventD])
+        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 2, [eventC, eventD]),
       )
       const [events] = await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, typeA, instanceA, 2))
 
@@ -81,7 +81,7 @@ describe('appendEvents()', pgSpec(function () {
 
     it('should fail if the specified offset is less than the next stream offset', async function () {
       const wasAppended = await this.inTransaction(
-        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 1, [eventC, eventD])
+        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 1, [eventC, eventD]),
       )
       const [events] = await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, typeA, instanceA))
 
@@ -91,7 +91,7 @@ describe('appendEvents()', pgSpec(function () {
 
     it('should fail if the specified offset is greater than the next stream offset', async function () {
       const wasAppended = await this.inTransaction(
-        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 3, [eventC, eventD])
+        async () => appendEvents(serialization, this.pgClient, typeA, instanceA, 3, [eventC, eventD]),
       )
       const [events] = await asyncIterableToArray(readEventsByStream(serialization, this.pgClient, typeA, instanceA))
 

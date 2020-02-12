@@ -47,7 +47,7 @@ async function createAccount (pgClient, data) {
     INSERT INTO bank.account AS a (id, name) VALUES ($1, $2)
     ON CONFLICT (id) DO UPDATE SET name = $2 WHERE a.name = ''
     `,
-    [accountId, name]
+    [accountId, name],
   )
 }
 
@@ -157,7 +157,7 @@ async function updateTransaction (pgClient, previousStatus, status, type, transa
     INSERT INTO bank.transaction AS t (status, type, id, from_id, to_id, amount) VALUES ($2, $3, $4, $5, $6, $7)
     ON CONFLICT (id) DO UPDATE SET status = $2 WHERE t.status = $1
     `,
-    [previousStatus, status, type, transactionId, fromAccountId, toAccountId, amount]
+    [previousStatus, status, type, transactionId, fromAccountId, toAccountId, amount],
   )
 }
 
@@ -200,7 +200,7 @@ async function updateAccount (pgClient, accountId, deltas) {
       withdrawalsOut,
       transfersIn,
       transfersOut,
-    ]
+    ],
   )
 }
 

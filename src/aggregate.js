@@ -17,7 +17,7 @@ async function handleCommandWithAggregate (serialization, pgClient, name, aggreg
   const next = await readNextStreamOffset(pgClient, streamType, instance)
   const {readState, updateState} = createStateController(
     copy,
-    async () => readAggregateState(serialization, pgClient, streamType, instance, next, applyEvent, createInitialState)
+    async () => readAggregateState(serialization, pgClient, streamType, instance, next, applyEvent, createInitialState),
   )
 
   const recordedEvents = []
@@ -45,7 +45,7 @@ async function readAggregateState (
   instance,
   next,
   applyEvent,
-  createInitialState
+  createInitialState,
 ) {
   const {copy} = serialization
   const events = readEventsByStream(serialization, pgClient, streamType, instance, 0, next)

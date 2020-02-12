@@ -46,7 +46,7 @@ describe('maintainCommandHandler()', pgSpec(function () {
           applyEvent: () => {},
         },
       },
-      {}
+      {},
     )
   })
 
@@ -73,7 +73,7 @@ describe('maintainCommandHandler()', pgSpec(function () {
       await consumeAsyncIterable(
         maintainCommandHandler(serialization, this.pgPool, this.handleCommand),
         2,
-        commands => commands.cancel()
+        commands => commands.cancel(),
       )
       const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
 
@@ -114,7 +114,7 @@ describe('maintainCommandHandler()', pgSpec(function () {
         consumeAsyncIterable(
           maintainCommandHandler(serialization, this.pgPool, this.handleCommand, {timeout: null}),
           4,
-          commands => commands.cancel()
+          commands => commands.cancel(),
         ),
 
         executeCommands(serialization, this.pgClient, sourceA, [commandC, commandD]),
@@ -135,7 +135,7 @@ describe('maintainCommandHandler()', pgSpec(function () {
         consumeAsyncIterable(
           maintainCommandHandler(serialization, this.pgPool, this.handleCommand, {clock}),
           4,
-          commands => commands.cancel()
+          commands => commands.cancel(),
         ),
 
         executeCommands(serialization, this.pgClient, sourceA, [commandC, commandD]),
@@ -161,7 +161,7 @@ describe('maintainCommandHandler()', pgSpec(function () {
         consumeAsyncIterable(
           maintainCommandHandler(serialization, this.pgPool, this.handleCommand, {clock}),
           4,
-          commands => commands.cancel()
+          commands => commands.cancel(),
         ),
 
         executeCommands(serialization, executeClient, sourceA, [commandC, commandD]),
@@ -182,7 +182,7 @@ describe('maintainCommandHandler()', pgSpec(function () {
       await consumeAsyncIterable(
         maintainCommandHandler(serialization, this.pgPool, this.handleCommand),
         2,
-        commands => commands.cancel()
+        commands => commands.cancel(),
       )
     })
 
@@ -191,7 +191,7 @@ describe('maintainCommandHandler()', pgSpec(function () {
         consumeAsyncIterable(
           maintainCommandHandler(serialization, this.pgPool, this.handleCommand, {timeout: null}),
           2,
-          commands => commands.cancel()
+          commands => commands.cancel(),
         ),
 
         executeCommands(serialization, this.pgClient, sourceA, [commandC, commandD]),
@@ -211,7 +211,7 @@ describe('maintainCommandHandler()', pgSpec(function () {
       const maintain = () => consumeAsyncIterable(
         maintainCommandHandler(serialization, this.pgPool, this.handleCommand, {timeout: null}),
         2,
-        commands => commands.cancel()
+        commands => commands.cancel(),
       )
 
       await Promise.all([

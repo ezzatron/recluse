@@ -73,7 +73,7 @@ async function readProjectionId (pgClient, type) {
     ON CONFLICT (type) DO UPDATE SET type = $1
     RETURNING id
     `,
-    [type]
+    [type],
   )
 
   if (result.rowCount < 1) throw new Error('Unable to read projection ID')
@@ -84,7 +84,7 @@ async function readProjectionId (pgClient, type) {
 async function readProjectionNext (pgClient, id) {
   const result = await pgClient.query(
     'SELECT next FROM recluse.projection WHERE id = $1',
-    [id]
+    [id],
   )
 
   if (result.rowCount < 1) throw new Error('Unable to read next projection offset')
@@ -95,7 +95,7 @@ async function readProjectionNext (pgClient, id) {
 async function incrementProjection (pgClient, type, offset) {
   const result = await pgClient.query(
     'UPDATE recluse.projection SET next = $2 + 1 WHERE type = $1 AND next = $2',
-    [type, offset]
+    [type, offset],
   )
 
   if (result.rowCount !== 1) throw new Error('Unable to lock projection for updating')

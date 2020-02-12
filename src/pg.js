@@ -149,7 +149,7 @@ function createContinuousQueryIterator (
   marshal,
   channel,
   timeout,
-  clock
+  clock,
 ) {
   let next = start
   let isListening = false
@@ -204,7 +204,7 @@ function createContinuousQueryIterator (
       await allSerial(
         async () => { if (iterator) await iterator.cancel() },
         async () => { if (isListening) await pgClient.query(`UNLISTEN ${channel}`) },
-        () => { if (timeoutId) clock.clearTimeout(timeoutId) }
+        () => { if (timeoutId) clock.clearTimeout(timeoutId) },
       )
     },
   }

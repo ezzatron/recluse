@@ -127,7 +127,7 @@ describe('readEventsByStream()', pgSpec(function () {
         readEventsByStream(serialization, this.pgClient, typeA, instanceA),
         1,
         events => events.cancel(),
-        async event => expect(event).to.exist()
+        async event => expect(event).to.exist(),
       )
     })
   })

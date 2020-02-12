@@ -113,7 +113,7 @@ describe('readEvents()', pgSpec(function () {
         readEvents(serialization, this.pgClient),
         1,
         events => events.cancel(),
-        event => expect(event).to.exist()
+        event => expect(event).to.exist(),
       )
     })
   })

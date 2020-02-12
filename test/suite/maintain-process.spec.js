@@ -78,7 +78,7 @@ describe('maintainProcess()', pgSpec(function () {
         maintainProcess(serialization, this.pgPool, nameA, process),
         2,
         process => process.cancel(),
-        wasProcessed => expect(wasProcessed).to.be.true()
+        wasProcessed => expect(wasProcessed).to.be.true(),
       )
       const [commands] = await asyncIterableToArray(readCommands(serialization, this.pgClient))
 
@@ -112,7 +112,7 @@ describe('maintainProcess()', pgSpec(function () {
         maintainProcess(serialization, this.pgPool, nameA, process),
         3,
         process => process.cancel(),
-        wasProcessed => expect(wasProcessed).to.be.true()
+        wasProcessed => expect(wasProcessed).to.be.true(),
       )
       const [commands] = await asyncIterableToArray(readCommands(serialization, this.pgClient))
 
@@ -137,7 +137,7 @@ describe('maintainProcess()', pgSpec(function () {
         maintainProcess(serialization, this.pgPool, nameA, process),
         2,
         process => process.cancel(),
-        wasProcessed => expect(wasProcessed).to.be.true()
+        wasProcessed => expect(wasProcessed).to.be.true(),
       )
       const [commands] = await asyncIterableToArray(readCommands(serialization, this.pgClient))
 
@@ -160,7 +160,7 @@ describe('maintainProcess()', pgSpec(function () {
         maintainProcess(serialization, this.pgPool, nameA, process),
         2,
         process => process.cancel(),
-        (wasProcessed, i) => expect(wasProcessed).to.equal(expectedWasProcesed[i])
+        (wasProcessed, i) => expect(wasProcessed).to.equal(expectedWasProcesed[i]),
       )
       const [commands] = await asyncIterableToArray(readCommands(serialization, this.pgClient))
 
@@ -183,7 +183,7 @@ describe('maintainProcess()', pgSpec(function () {
         maintainProcess(serialization, this.pgPool, nameA, process),
         2,
         process => process.cancel(),
-        (wasProcessed, i) => expect(wasProcessed).to.equal(expectedWasProcesed[i])
+        (wasProcessed, i) => expect(wasProcessed).to.equal(expectedWasProcesed[i]),
       )
       const [commands] = await asyncIterableToArray(readCommands(serialization, this.pgClient))
 
@@ -243,7 +243,7 @@ describe('maintainProcess()', pgSpec(function () {
         consumeAsyncIterable(
           maintainProcess(serialization, this.pgPool, nameA, process, {timeout: null}),
           4,
-          process => process.cancel()
+          process => process.cancel(),
         ),
 
         appendEvents(serialization, this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
@@ -271,7 +271,7 @@ describe('maintainProcess()', pgSpec(function () {
         consumeAsyncIterable(
           maintainProcess(serialization, this.pgPool, nameA, process, {clock}),
           4,
-          process => process.cancel()
+          process => process.cancel(),
         ),
 
         appendEvents(serialization, this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
@@ -305,7 +305,7 @@ describe('maintainProcess()', pgSpec(function () {
         consumeAsyncIterable(
           maintainProcess(serialization, this.pgPool, nameA, process, {clock}),
           4,
-          process => process.cancel()
+          process => process.cancel(),
         ),
 
         appendEvents(serialization, appendClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
@@ -335,7 +335,7 @@ describe('maintainProcess()', pgSpec(function () {
       await consumeAsyncIterable(
         maintainProcess(serialization, this.pgPool, nameA, this.process),
         2,
-        process => process.cancel()
+        process => process.cancel(),
       )
     })
 
@@ -344,7 +344,7 @@ describe('maintainProcess()', pgSpec(function () {
         consumeAsyncIterable(
           maintainProcess(serialization, this.pgPool, nameA, this.process, {timeout: null}),
           2,
-          process => process.cancel()
+          process => process.cancel(),
         ),
 
         appendEvents(serialization, this.pgClient, streamTypeA, streamInstanceA, 2, [eventC, eventD]),
@@ -372,7 +372,7 @@ describe('maintainProcess()', pgSpec(function () {
       const maintain = () => consumeAsyncIterable(
         maintainProcess(serialization, this.pgPool, nameA, process, {timeout: null}),
         2,
-        process => process.cancel()
+        process => process.cancel(),
       )
 
       await Promise.all([

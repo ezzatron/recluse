@@ -17,7 +17,7 @@ async function executeCommands (serialization, pgClient, source, commands) {
 
     await pgClient.query(
       'INSERT INTO recluse.command (source, type, data) VALUES ($1, $2, $3)',
-      [source, type, serialize(data, COMMAND, type)]
+      [source, type, serialize(data, COMMAND, type)],
     )
   }
 
@@ -30,7 +30,7 @@ function readCommands (serialization, pgClient, id = 0) {
   return pgClient.query(asyncQuery(
     'SELECT * FROM recluse.command WHERE id >= $1 ORDER BY id',
     [id],
-    marshal.bind(null, unserialize)
+    marshal.bind(null, unserialize),
   ))
 }
 
@@ -47,7 +47,7 @@ function readUnhandledCommandsContinuously (serialization, pgClient, options = {
       clock,
       marshal: marshal.bind(null, unserialize),
       timeout,
-    }
+    },
   )
 }
 
