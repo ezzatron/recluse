@@ -1,34 +1,38 @@
-const {expect} = require('chai')
-
-const {consumeAsyncIterable, pgSpec, TIME_PATTERN} = require('../helper.js')
-
+const {consumeAsyncIterable} = require('../helper/async.js')
+const {createTestHelper, TIME_PATTERN} = require('../helper/pg.js')
 const {executeCommands, readUnhandledCommandsContinuously} = require('../../src/command.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
 
-describe('readUnhandledCommandsContinuously()', pgSpec(function () {
+describe('readUnhandledCommandsContinuously()', () => {
+  const pgHelper = createTestHelper()
+
+  beforeEach(async () => {
+    await initializeSchema(pgHelper.client)
+  })
+
   const sourceA = 'command-source-a'
   const commandTypeA = 'command-type-a'
   const commandTypeB = 'command-type-b'
   const commandA = {type: commandTypeA, data: 'a'}
   const commandB = {type: commandTypeB, data: 'b'}
 
-  beforeEach(async function () {
-    await initializeSchema(this.pgClient)
+  beforeEach(async () => {
+    await initializeSchema(pgHelper.client)
   })
 
-  context('with no commands', function () {
-    it('should support cancellation', async function () {
-      await readUnhandledCommandsContinuously(serialization, this.pgClient).cancel()
+  describe('with no commands', () => {
+    it('should support cancellation', async () => {
+      expect(await readUnhandledCommandsContinuously(serialization, pgHelper.client).cancel()).toBeUndefined()
     })
   })
 
-  context('with only unhandled commands', function () {
-    beforeEach(async function () {
-      await executeCommands(serialization, this.pgClient, sourceA, [commandA, commandB])
+  describe('with only unhandled commands', () => {
+    beforeEach(async () => {
+      await executeCommands(serialization, pgHelper.client, sourceA, [commandA, commandB])
     })
 
-    it('should return all commands', async function () {
+    it('should return all commands', async () => {
       const expectedWrappers = [
         {id: 0, source: sourceA, executedAt: TIME_PATTERN, handledAt: null},
         {id: 1, source: sourceA, executedAt: TIME_PATTERN, handledAt: null},
@@ -39,24 +43,24 @@ describe('readUnhandledCommandsContinuously()', pgSpec(function () {
       ]
 
       await consumeAsyncIterable(
-        readUnhandledCommandsContinuously(serialization, this.pgClient),
+        readUnhandledCommandsContinuously(serialization, pgHelper.client),
         expected.length,
         commands => commands.cancel(),
         wrapper => {
-          expect(wrapper).to.have.fields(expectedWrappers.shift())
-          expect(wrapper.command).to.deep.equal(expected.shift())
+          expect(wrapper).toMatchObject(expectedWrappers.shift())
+          expect(wrapper.command).toEqual(expected.shift())
         },
       )
     })
   })
 
-  context('with some handled commands', function () {
-    beforeEach(async function () {
-      await executeCommands(serialization, this.pgClient, sourceA, [commandA, commandB])
-      await this.query('UPDATE recluse.command SET handled_at = now() WHERE id = 0')
+  describe('with some handled commands', () => {
+    beforeEach(async () => {
+      await executeCommands(serialization, pgHelper.client, sourceA, [commandA, commandB])
+      await pgHelper.query('UPDATE recluse.command SET handled_at = now() WHERE id = 0')
     })
 
-    it('should return only the unhandled commands', async function () {
+    it('should return only the unhandled commands', async () => {
       const expectedWrappers = [
         {id: 1, source: sourceA, executedAt: TIME_PATTERN, handledAt: null},
       ]
@@ -65,14 +69,14 @@ describe('readUnhandledCommandsContinuously()', pgSpec(function () {
       ]
 
       await consumeAsyncIterable(
-        readUnhandledCommandsContinuously(serialization, this.pgClient, {id: 1}),
+        readUnhandledCommandsContinuously(serialization, pgHelper.client, {id: 1}),
         expected.length,
         commands => commands.cancel(),
         wrapper => {
-          expect(wrapper).to.have.fields(expectedWrappers.shift())
-          expect(wrapper.command).to.deep.equal(expected.shift())
+          expect(wrapper).toMatchObject(expectedWrappers.shift())
+          expect(wrapper.command).toEqual(expected.shift())
         },
       )
     })
   })
-}))
+})

@@ -1,6 +1,0 @@
-dist: xenial
-language: node_js
-node_js: [node]
-addons:
-  postgresql: "10"
-script: [yarn test, yarn ci-lint]

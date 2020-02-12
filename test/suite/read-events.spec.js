@@ -1,12 +1,16 @@
-const {expect} = require('chai')
-
-const {asyncIterableToArray, consumeAsyncIterable, pgSpec, TIME_PATTERN} = require('../helper.js')
-
 const {appendEvents, readEvents} = require('../../src/event.js')
+const {asyncIterableToArray, consumeAsyncIterable} = require('../helper/async.js')
+const {createTestHelper, TIME_PATTERN} = require('../helper/pg.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
 
-describe('readEvents()', pgSpec(function () {
+describe('readEvents()', () => {
+  const pgHelper = createTestHelper()
+
+  beforeEach(async () => {
+    await initializeSchema(pgHelper.client)
+  })
+
   const typeA = 'stream-type-a'
   const instanceA = 'stream-instance-a'
   const instanceB = 'stream-instance-b'
@@ -17,121 +21,117 @@ describe('readEvents()', pgSpec(function () {
   const eventC = {type: eventTypeA, data: 'c'}
   const eventD = {type: eventTypeB, data: 'd'}
 
-  beforeEach(async function () {
-    await initializeSchema(this.pgClient)
-  })
+  describe('with no events', () => {
+    it('should return an empty result for start offset 0', async () => {
+      const [events] = await asyncIterableToArray(readEvents(serialization, pgHelper.client))
 
-  context('with no events', function () {
-    it('should return an empty result for start offset 0', async function () {
-      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
-
-      expect(events).to.have.length(0)
+      expect(events).toHaveLength(0)
     })
 
-    it('should return an empty result for start offset 0 with a positive end offset', async function () {
-      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient, 0, 111))
+    it('should return an empty result for start offset 0 with a positive end offset', async () => {
+      const [events] = await asyncIterableToArray(readEvents(serialization, pgHelper.client, 0, 111))
 
-      expect(events).to.have.length(0)
+      expect(events).toHaveLength(0)
     })
 
-    it('should return an empty result for positive start offsets', async function () {
-      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient, 111))
+    it('should return an empty result for positive start offsets', async () => {
+      const [events] = await asyncIterableToArray(readEvents(serialization, pgHelper.client, 111))
 
-      expect(events).to.have.length(0)
+      expect(events).toHaveLength(0)
     })
 
-    it('should return an empty result for positive start and end offsets', async function () {
-      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient, 111, 222))
+    it('should return an empty result for positive start and end offsets', async () => {
+      const [events] = await asyncIterableToArray(readEvents(serialization, pgHelper.client, 111, 222))
 
-      expect(events).to.have.length(0)
+      expect(events).toHaveLength(0)
     })
 
-    it('should support cancellation', async function () {
-      await readEvents(serialization, this.pgClient).cancel()
+    it('should support cancellation', async () => {
+      expect(await readEvents(serialization, pgHelper.client).cancel()).toBeUndefined()
     })
   })
 
-  context('with a non-empty stream', function () {
-    beforeEach(async function () {
-      await appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA, eventB, eventC])
+  describe('with a non-empty stream', () => {
+    beforeEach(async () => {
+      await appendEvents(serialization, pgHelper.client, typeA, instanceA, 0, [eventA, eventB, eventC])
     })
 
-    it('should return the correct events for start offset 0', async function () {
-      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
+    it('should return the correct events for start offset 0', async () => {
+      const [events] = await asyncIterableToArray(readEvents(serialization, pgHelper.client))
 
-      expect(events).to.have.length(3)
-      expect(events[0]).to.have.fields({globalOffset: 0, time: TIME_PATTERN})
-      expect(events[0].event).to.deep.equal(eventA)
-      expect(events[1]).to.have.fields({globalOffset: 1, time: TIME_PATTERN})
-      expect(events[1].event).to.deep.equal(eventB)
-      expect(events[2]).to.have.fields({globalOffset: 2, time: TIME_PATTERN})
-      expect(events[2].event).to.deep.equal(eventC)
+      expect(events).toHaveLength(3)
+      expect(events[0]).toMatchObject({globalOffset: 0, time: TIME_PATTERN})
+      expect(events[0].event).toEqual(eventA)
+      expect(events[1]).toMatchObject({globalOffset: 1, time: TIME_PATTERN})
+      expect(events[1].event).toEqual(eventB)
+      expect(events[2]).toMatchObject({globalOffset: 2, time: TIME_PATTERN})
+      expect(events[2].event).toEqual(eventC)
     })
 
-    it('should return the correct events for start offset 0 with a positive end offset', async function () {
-      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient, 0, 2))
+    it('should return the correct events for start offset 0 with a positive end offset', async () => {
+      const [events] = await asyncIterableToArray(readEvents(serialization, pgHelper.client, 0, 2))
 
-      expect(events).to.have.length(2)
-      expect(events[0]).to.have.fields({globalOffset: 0, time: TIME_PATTERN})
-      expect(events[0].event).to.deep.equal(eventA)
-      expect(events[1]).to.have.fields({globalOffset: 1, time: TIME_PATTERN})
-      expect(events[1].event).to.deep.equal(eventB)
+      expect(events).toHaveLength(2)
+      expect(events[0]).toMatchObject({globalOffset: 0, time: TIME_PATTERN})
+      expect(events[0].event).toEqual(eventA)
+      expect(events[1]).toMatchObject({globalOffset: 1, time: TIME_PATTERN})
+      expect(events[1].event).toEqual(eventB)
     })
 
-    it('should return the correct events for positive start offsets that exist', async function () {
-      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient, 1))
+    it('should return the correct events for positive start offsets that exist', async () => {
+      const [events] = await asyncIterableToArray(readEvents(serialization, pgHelper.client, 1))
 
-      expect(events).to.have.length(2)
-      expect(events[0]).to.have.fields({globalOffset: 1, time: TIME_PATTERN})
-      expect(events[0].event).to.deep.equal(eventB)
-      expect(events[1]).to.have.fields({globalOffset: 2, time: TIME_PATTERN})
-      expect(events[1].event).to.deep.equal(eventC)
+      expect(events).toHaveLength(2)
+      expect(events[0]).toMatchObject({globalOffset: 1, time: TIME_PATTERN})
+      expect(events[0].event).toEqual(eventB)
+      expect(events[1]).toMatchObject({globalOffset: 2, time: TIME_PATTERN})
+      expect(events[1].event).toEqual(eventC)
     })
 
-    it('should return the correct events for positive start and end offsets that exist', async function () {
-      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient, 1, 2))
+    it('should return the correct events for positive start and end offsets that exist', async () => {
+      const [events] = await asyncIterableToArray(readEvents(serialization, pgHelper.client, 1, 2))
 
-      expect(events).to.have.length(1)
-      expect(events[0]).to.have.fields({globalOffset: 1, time: TIME_PATTERN})
-      expect(events[0].event).to.deep.equal(eventB)
+      expect(events).toHaveLength(1)
+      expect(events[0]).toMatchObject({globalOffset: 1, time: TIME_PATTERN})
+      expect(events[0].event).toEqual(eventB)
     })
 
-    it('should return an empty result for positive start offsets that do not exist', async function () {
-      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient, 111))
+    it('should return an empty result for positive start offsets that do not exist', async () => {
+      const [events] = await asyncIterableToArray(readEvents(serialization, pgHelper.client, 111))
 
-      expect(events).to.have.length(0)
+      expect(events).toHaveLength(0)
     })
 
-    it('should return an empty result for positive start and end offsets that do not exist', async function () {
-      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient, 111, 222))
+    it('should return an empty result for positive start and end offsets that do not exist', async () => {
+      const [events] = await asyncIterableToArray(readEvents(serialization, pgHelper.client, 111, 222))
 
-      expect(events).to.have.length(0)
+      expect(events).toHaveLength(0)
     })
 
-    it('should support cancellation', async function () {
+    it('should support cancellation', async () => {
       await consumeAsyncIterable(
-        readEvents(serialization, this.pgClient),
+        readEvents(serialization, pgHelper.client),
         1,
         events => events.cancel(),
-        event => expect(event).to.exist(),
+        event => expect(event).toBeDefined(),
       )
     })
   })
 
-  context('with multiple non-empty streams', function () {
-    beforeEach(async function () {
-      await appendEvents(serialization, this.pgClient, typeA, instanceA, 0, [eventA, eventB])
-      await appendEvents(serialization, this.pgClient, typeA, instanceB, 0, [eventC, eventD])
+  describe('with multiple non-empty streams', () => {
+    beforeEach(async () => {
+      await appendEvents(serialization, pgHelper.client, typeA, instanceA, 0, [eventA, eventB])
+      await appendEvents(serialization, pgHelper.client, typeA, instanceB, 0, [eventC, eventD])
     })
 
-    it('should return events for all streams', async function () {
-      const [events] = await asyncIterableToArray(readEvents(serialization, this.pgClient))
+    it('should return events for all streams', async () => {
+      const [events] = await asyncIterableToArray(readEvents(serialization, pgHelper.client))
 
-      expect(events).to.have.length(4)
-      expect(events[0].event).to.deep.equal(eventA)
-      expect(events[1].event).to.deep.equal(eventB)
-      expect(events[2].event).to.deep.equal(eventC)
-      expect(events[3].event).to.deep.equal(eventD)
+      expect(events).toHaveLength(4)
+      expect(events[0].event).toEqual(eventA)
+      expect(events[1].event).toEqual(eventB)
+      expect(events[2].event).toEqual(eventC)
+      expect(events[3].event).toEqual(eventD)
     })
   })
-}))
+})
