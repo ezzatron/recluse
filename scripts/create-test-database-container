@@ -7,5 +7,5 @@ docker pull postgres:alpine
 
 docker run --detach --name recluse-postgres-test \
   --publish 5432 \
-  --env POSTGRES_PASSWORD= \
+  --env POSTGRES_PASSWORD=recluse \
   postgres:alpine

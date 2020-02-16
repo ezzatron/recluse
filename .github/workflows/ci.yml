@@ -13,7 +13,7 @@ jobs:
         image: postgres:alpine
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
         env:
-          POSTGRES_PASSWORD: ''
+          POSTGRES_PASSWORD: recluse
         ports:
         - 5432/tcp
     steps:
@@ -33,3 +33,4 @@ jobs:
         PGHOST: localhost
         PGPORT: ${{ job.services.postgres.ports[5432] }}
         PGUSER: postgres
+        PGPASSWORD: recluse
