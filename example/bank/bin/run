@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-const spec = require('../src/index.js')
 const {createApp} = require('../../../src/app.js')
+const spec = require('../src/index.js')
 const {runAsync} = require('./util.js')
 
 runAsync(createApp(spec).run())

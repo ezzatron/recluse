@@ -7,7 +7,7 @@ async function main () {
 
   if (!PGDATABASE) throw new Error('No envvars set')
 
-  console.log(`Dropping ${PGDATABASE}`)
+  console.log(`Dropping ${PGDATABASE}`) // eslint-disable-line no-console
 
   const client = new Client({
     host: PGHOST,
@@ -26,7 +26,7 @@ async function main () {
 }
 
 main().catch(error => {
-  console.error(error.stack)
+  console.error(error.stack) // eslint-disable-line no-console
 
   process.exit(1)
 })

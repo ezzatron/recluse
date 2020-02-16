@@ -2,8 +2,8 @@
 
 const uuidv4 = require('uuid')
 
-const {accountIdByName, die, executeCommands, runAsync, withClient} = require('./util.js')
 const {WITHDRAW} = require('../src/command.js')
+const {accountIdByName, die, executeCommands, runAsync, withClient} = require('./util.js')
 
 runAsync(withClient(async pgClient => {
   const [,, accountName, amountString] = process.argv
