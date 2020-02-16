@@ -10,6 +10,27 @@ const {
   WITHDRAWAL_STARTED,
 } = require('../event.js')
 
+module.exports = {
+  async applyEvent (pgClient, event) {
+    const {type, data} = event
+
+    switch (type) {
+      case ACCOUNT_OPENED: return createAccount(pgClient, data)
+
+      case DEPOSIT_STARTED: return createDeposit(pgClient, data)
+      case ACCOUNT_CREDITED_FOR_DEPOSIT: return completeDeposit(pgClient, data)
+
+      case WITHDRAWAL_STARTED: return createWithdrawal(pgClient, data)
+      case WITHDRAWAL_DECLINED_DUE_TO_INSUFFICIENT_FUNDS: return declineWithdrawal(pgClient, data)
+      case ACCOUNT_DEBITED_FOR_WITHDRAWAL: return completeWithdrawal(pgClient, data)
+
+      case TRANSFER_STARTED: return createTransfer(pgClient, data)
+      case TRANSFER_DECLINED_DUE_TO_INSUFFICIENT_FUNDS: return declineTransfer(pgClient, data)
+      case ACCOUNT_CREDITED_FOR_TRANSFER: return completeTransfer(pgClient, data)
+    }
+  },
+}
+
 // transaction types
 const DEPOSIT = 'DEPOSIT'
 const TRANSFER = 'TRANSFER'
@@ -19,25 +40,6 @@ const WITHDRAWAL = 'WITHDRAWAL'
 const COMPLETE = 'COMPLETE'
 const DECLINED = 'DECLINED'
 const PENDING = 'PENDING'
-
-async function applyEvent (pgClient, event) {
-  const {type, data} = event
-
-  switch (type) {
-    case ACCOUNT_OPENED: return createAccount(pgClient, data)
-
-    case DEPOSIT_STARTED: return createDeposit(pgClient, data)
-    case ACCOUNT_CREDITED_FOR_DEPOSIT: return completeDeposit(pgClient, data)
-
-    case WITHDRAWAL_STARTED: return createWithdrawal(pgClient, data)
-    case WITHDRAWAL_DECLINED_DUE_TO_INSUFFICIENT_FUNDS: return declineWithdrawal(pgClient, data)
-    case ACCOUNT_DEBITED_FOR_WITHDRAWAL: return completeWithdrawal(pgClient, data)
-
-    case TRANSFER_STARTED: return createTransfer(pgClient, data)
-    case TRANSFER_DECLINED_DUE_TO_INSUFFICIENT_FUNDS: return declineTransfer(pgClient, data)
-    case ACCOUNT_CREDITED_FOR_TRANSFER: return completeTransfer(pgClient, data)
-  }
-}
 
 async function createAccount (pgClient, data) {
   const {accountId, name} = data
@@ -202,8 +204,4 @@ async function updateAccount (pgClient, accountId, deltas) {
       transfersOut,
     ],
   )
-}
-
-module.exports = {
-  applyEvent,
 }

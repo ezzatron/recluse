@@ -6,33 +6,32 @@ const {
   DEPOSIT_STARTED,
 } = require('../event.js')
 
-function routeEvent (event) {
-  const {data: {transactionId}} = event
+module.exports = {
+  eventTypes: [
+    DEPOSIT_STARTED,
+  ],
 
-  return transactionId
-}
+  commandTypes: [
+    CREDIT_ACCOUNT_FOR_DEPOSIT,
+  ],
 
-function handleEvent (scope) {
-  const {event: {type}} = scope
+  routeEvent (event) {
+    const {data: {transactionId}} = event
 
-  switch (type) {
-    case DEPOSIT_STARTED: return credit(scope)
-  }
+    return transactionId
+  },
+
+  handleEvent (scope) {
+    const {event: {type}} = scope
+
+    switch (type) {
+      case DEPOSIT_STARTED: return credit(scope)
+    }
+  },
 }
 
 function credit (scope) {
   const {event: {data: {accountId, amount, transactionId}}, executeCommands} = scope
 
   executeCommands({type: CREDIT_ACCOUNT_FOR_DEPOSIT, data: {accountId, amount, transactionId}})
-}
-
-module.exports = {
-  eventTypes: [
-    DEPOSIT_STARTED,
-  ],
-  commandTypes: [
-    CREDIT_ACCOUNT_FOR_DEPOSIT,
-  ],
-  routeEvent,
-  handleEvent,
 }

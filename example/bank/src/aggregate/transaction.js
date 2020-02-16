@@ -10,20 +10,34 @@ const {
   WITHDRAWAL_STARTED,
 } = require('../event.js')
 
-function routeCommand (command) {
-  const {data: {transactionId}} = command
+module.exports = {
+  commandTypes: [
+    DEPOSIT,
+    TRANSFER,
+    WITHDRAW,
+  ],
 
-  return transactionId
-}
+  eventTypes: [
+    DEPOSIT_STARTED,
+    TRANSFER_STARTED,
+    WITHDRAWAL_STARTED,
+  ],
 
-async function handleCommand (scope) {
-  const {command: {type}} = scope
+  routeCommand (command) {
+    const {data: {transactionId}} = command
 
-  switch (type) {
-    case DEPOSIT: return deposit(scope)
-    case TRANSFER: return transfer(scope)
-    case WITHDRAW: return withdraw(scope)
-  }
+    return transactionId
+  },
+
+  async handleCommand (scope) {
+    const {command: {type}} = scope
+
+    switch (type) {
+      case DEPOSIT: return deposit(scope)
+      case TRANSFER: return transfer(scope)
+      case WITHDRAW: return withdraw(scope)
+    }
+  },
 }
 
 async function deposit (scope) {
@@ -42,19 +56,4 @@ async function withdraw (scope) {
   const {command: {data: {accountId, amount, transactionId}}, recordEvents} = scope
 
   await recordEvents({type: WITHDRAWAL_STARTED, data: {accountId, amount, transactionId}})
-}
-
-module.exports = {
-  commandTypes: [
-    DEPOSIT,
-    TRANSFER,
-    WITHDRAW,
-  ],
-  eventTypes: [
-    DEPOSIT_STARTED,
-    TRANSFER_STARTED,
-    WITHDRAWAL_STARTED,
-  ],
-  routeCommand,
-  handleCommand,
 }

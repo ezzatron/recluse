@@ -8,19 +8,31 @@ const {
   TRANSFER_STARTED,
 } = require('../event.js')
 
-function routeEvent (event) {
-  const {data: {transactionId}} = event
+module.exports = {
+  eventTypes: [
+    ACCOUNT_DEBITED_FOR_TRANSFER,
+    TRANSFER_STARTED,
+  ],
 
-  return transactionId
-}
+  commandTypes: [
+    CREDIT_ACCOUNT_FOR_TRANSFER,
+    DEBIT_ACCOUNT_FOR_TRANSFER,
+  ],
 
-async function handleEvent (scope) {
-  const {event: {type}} = scope
+  routeEvent (event) {
+    const {data: {transactionId}} = event
 
-  switch (type) {
-    case TRANSFER_STARTED: return debit(scope)
-    case ACCOUNT_DEBITED_FOR_TRANSFER: return credit(scope)
-  }
+    return transactionId
+  },
+
+  async handleEvent (scope) {
+    const {event: {type}} = scope
+
+    switch (type) {
+      case TRANSFER_STARTED: return debit(scope)
+      case ACCOUNT_DEBITED_FOR_TRANSFER: return credit(scope)
+    }
+  },
 }
 
 async function debit (scope) {
@@ -35,17 +47,4 @@ async function credit (scope) {
   const accountId = await readState()
 
   executeCommands({type: CREDIT_ACCOUNT_FOR_TRANSFER, data: {accountId, amount, transactionId}})
-}
-
-module.exports = {
-  eventTypes: [
-    ACCOUNT_DEBITED_FOR_TRANSFER,
-    TRANSFER_STARTED,
-  ],
-  commandTypes: [
-    CREDIT_ACCOUNT_FOR_TRANSFER,
-    DEBIT_ACCOUNT_FOR_TRANSFER,
-  ],
-  routeEvent,
-  handleEvent,
 }
