@@ -1043,6 +1043,11 @@ cssstyle@^2.0.0:
   dependencies:
     cssom "~0.3.6"
 
+cycle@~1.0.3:
+  version "1.0.3"
+  resolved "https://registry.yarnpkg.com/cycle/-/cycle-1.0.3.tgz#21e80b2be8580f98b468f379430662b046c34ad2"
+  integrity sha1-IegLK+hYD5i0aPN5QwZisEbDStI=
+
 dashdash@^1.12.0:
   version "1.14.1"
   resolved "https://registry.yarnpkg.com/dashdash/-/dashdash-1.14.1.tgz#853cfa0f7cbe2fed5de20326b8dd581035f6e2f0"
@@ -2802,6 +2807,17 @@ lodash@^4.17.13, lodash@^4.17.14, lodash@^4.17.15:
   resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.15.tgz#b447f6670a0455bbfeedd11392eff330ea097548"
   integrity sha512-8xOcRHvCjnocdS5cpwXQXVzmmh5e5+saE2QGoeQmbKmRS6J3VQppPOIt0MnmE+4xlZoumy0GPG0D0MVIQbNA1A==
 
+logform@^1.6.0:
+  version "1.10.0"
+  resolved "https://registry.yarnpkg.com/logform/-/logform-1.10.0.tgz#c9d5598714c92b546e23f4e78147c40f1e02012e"
+  integrity sha512-em5ojIhU18fIMOw/333mD+ZLE2fis0EzXl1ZwHx4iQzmpQi6odNiY/t+ITNr33JZhT9/KEaH+UPIipr6a9EjWg==
+  dependencies:
+    colors "^1.2.1"
+    fast-safe-stringify "^2.0.4"
+    fecha "^2.3.3"
+    ms "^2.1.1"
+    triple-beam "^1.2.0"
+
 logform@^2.1.1:
   version "2.1.2"
   resolved "https://registry.yarnpkg.com/logform/-/logform-2.1.2.tgz#957155ebeb67a13164069825ce67ddb5bb2dd360"
@@ -3711,7 +3727,7 @@ saxes@^3.1.9:
   dependencies:
     xmlchars "^2.1.1"
 
-"semver@2 || 3 || 4 || 5", semver@^5.4.1, semver@^5.5.0:
+"semver@2 || 3 || 4 || 5", semver@^5.4.1, semver@^5.5.0, semver@^5.6.0:
   version "5.7.1"
   resolved "https://registry.yarnpkg.com/semver/-/semver-5.7.1.tgz#a954f931aeba508d307bbf069eff0c01c96116f7"
   integrity sha512-sauaDf/PZdVgrLTNYHRtpXa1iRiKcaebiKQ1BJdpQlWH2lCvexQdX55snPFyK7QzpudqbCI0qXFfOasHdyNDGQ==
@@ -4412,7 +4428,25 @@ which@^2.0.1:
   dependencies:
     isexe "^2.0.0"
 
-winston-transport@^4.3.0:
+winston-compat@^0.1.4:
+  version "0.1.4"
+  resolved "https://registry.yarnpkg.com/winston-compat/-/winston-compat-0.1.4.tgz#599b4ce807ffe728713ecc25ede3f6b89425b739"
+  integrity sha512-mMEfFsSm6GmkFF+f4/0UJtG4N1vSaczGmXLVJYmS/+u2zUaIPcw2ZRuwUg2TvVBjswgiraN+vNnAG8z4fRUZ4w==
+  dependencies:
+    cycle "~1.0.3"
+    logform "^1.6.0"
+    triple-beam "^1.2.0"
+
+winston-null@^2.0.0:
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/winston-null/-/winston-null-2.0.0.tgz#7357fed74b9b40198b9dd3ec2872f82fb54df2ae"
+  integrity sha512-uS5tJB5OkLWOoc3I7/LsWUfTIa5Du38XSviHf/b0TINK659Np9368FJwTt15UoZQYUQVxLpM06lxk2dKET22Xw==
+  dependencies:
+    semver "^5.6.0"
+    winston-compat "^0.1.4"
+    winston-transport "^4.2.0"
+
+winston-transport@^4.2.0, winston-transport@^4.3.0:
   version "4.3.0"
   resolved "https://registry.yarnpkg.com/winston-transport/-/winston-transport-4.3.0.tgz#df68c0c202482c448d9b47313c07304c2d7c2c66"
   integrity sha512-B2wPuwUi3vhzn/51Uukcao4dIduEiPOcOt9HJ3QeaXgkJ5Z7UwpBzxS4ZGNHtrxrUvTwemsQiSys0ihOf8Mp1A==
