@@ -10,6 +10,7 @@ describe('maintainProjection()', () => {
   const pgHelper = createTestHelper()
 
   beforeEach(async () => {
+    pgHelper.trackSchemas('recluse')
     await initializeSchema(pgHelper.client)
   })
 
