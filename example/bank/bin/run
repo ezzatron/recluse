@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const {createApp} = require('../../../src/app.js')
-const spec = require('../src/index.js')
+const createBankSpec = require('../../../test/fixture/app/bank/index.js')
 const {runAsync} = require('./util.js')
 
-runAsync(createApp(spec).run())
+runAsync(createApp(createBankSpec('bank')).run())

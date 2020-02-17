@@ -2,7 +2,7 @@
 
 const uuidv4 = require('uuid')
 
-const {OPEN_ACCOUNT} = require('../src/command.js')
+const {OPEN_ACCOUNT} = require('../../../test/fixture/app/bank/command.js')
 const {accountIdByName, die, executeCommands, runAsync, withClient} = require('./util.js')
 
 runAsync(withClient(async pgClient => {
