@@ -116,10 +116,10 @@ function createRun (spec) {
       error => die(1, `Stopping: ${error.stack}`),
     )
 
-    return function stop () {
+    return async function stop () {
       const cancellations = threads.map(([, thread]) => thread.cancel())
 
-      Promise.all(cancellations)
+      await Promise.all(cancellations)
         .catch(error => die(1, `Cancellation failed: ${error.stack}`))
     }
   }
