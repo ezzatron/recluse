@@ -5,6 +5,7 @@ const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
 const {asyncIterableToArray, consumeAsyncIterable} = require('../helper/async.js')
 const {createClock} = require('../helper/clock.js')
+const {createLogger} = require('../helper/logging.js')
 const {createTestHelper} = require('../helper/pg.js')
 
 describe('maintainProcess()', () => {
@@ -15,6 +16,7 @@ describe('maintainProcess()', () => {
     await initializeSchema(pgHelper.client)
   })
 
+  const logger = createLogger()
   const nameA = 'process-name-a'
   const instanceA = 'process-instance-a'
   const streamTypeA = 'stream-type-a'
@@ -43,7 +45,7 @@ describe('maintainProcess()', () => {
       }
       jest.spyOn(process, 'routeEvent')
       await appendEvents(serialization, pgHelper.client, streamTypeA, streamInstanceA, 0, [eventA])
-      await maintainProcess(serialization, pgHelper.client, nameA, emptyProcess).cancel()
+      await maintainProcess(logger, serialization, pgHelper.client, nameA, emptyProcess).cancel()
 
       expect(process.routeEvent).not.toHaveBeenCalled()
     })
@@ -69,7 +71,7 @@ describe('maintainProcess()', () => {
         },
       }
       await consumeAsyncIterable(
-        maintainProcess(serialization, pgHelper.pool, nameA, process),
+        maintainProcess(logger, serialization, pgHelper.pool, nameA, process),
         2,
         process => process.cancel(),
         wasProcessed => expect(wasProcessed).toBe(true),
@@ -103,7 +105,7 @@ describe('maintainProcess()', () => {
         },
       }
       await consumeAsyncIterable(
-        maintainProcess(serialization, pgHelper.pool, nameA, process),
+        maintainProcess(logger, serialization, pgHelper.pool, nameA, process),
         3,
         process => process.cancel(),
         wasProcessed => expect(wasProcessed).toBe(true),
@@ -128,7 +130,7 @@ describe('maintainProcess()', () => {
         },
       }
       await consumeAsyncIterable(
-        maintainProcess(serialization, pgHelper.pool, nameA, process),
+        maintainProcess(logger, serialization, pgHelper.pool, nameA, process),
         2,
         process => process.cancel(),
         wasProcessed => expect(wasProcessed).toBe(true),
@@ -151,7 +153,7 @@ describe('maintainProcess()', () => {
       }
       const expectedWasProcesed = [true, false]
       await consumeAsyncIterable(
-        maintainProcess(serialization, pgHelper.pool, nameA, process),
+        maintainProcess(logger, serialization, pgHelper.pool, nameA, process),
         2,
         process => process.cancel(),
         (wasProcessed, i) => expect(wasProcessed).toBe(expectedWasProcesed[i]),
@@ -174,7 +176,7 @@ describe('maintainProcess()', () => {
       }
       const expectedWasProcesed = [true, false]
       await consumeAsyncIterable(
-        maintainProcess(serialization, pgHelper.pool, nameA, process),
+        maintainProcess(logger, serialization, pgHelper.pool, nameA, process),
         2,
         process => process.cancel(),
         (wasProcessed, i) => expect(wasProcessed).toBe(expectedWasProcesed[i]),
@@ -186,7 +188,7 @@ describe('maintainProcess()', () => {
     })
 
     it('should throw if an unexpected commnd is executed', async () => {
-      const process = maintainProcess(serialization, pgHelper.pool, nameA, {
+      const process = maintainProcess(logger, serialization, pgHelper.pool, nameA, {
         ...emptyProcess,
         eventTypes: [eventTypeA],
         commandTypes: [commandTypeA],
@@ -203,7 +205,7 @@ describe('maintainProcess()', () => {
 
     it('should handle errors while processing events', async () => {
       const error = new Error('You done goofed')
-      const process = maintainProcess(serialization, pgHelper.pool, nameA, {
+      const process = maintainProcess(logger, serialization, pgHelper.pool, nameA, {
         ...emptyProcess,
         eventTypes: [eventTypeA, eventTypeB],
         handleEvent: async () => { throw error },
@@ -225,7 +227,7 @@ describe('maintainProcess()', () => {
       }
       await Promise.all([
         consumeAsyncIterable(
-          maintainProcess(serialization, pgHelper.pool, nameA, process, {timeout: null}),
+          maintainProcess(logger, serialization, pgHelper.pool, nameA, process, {timeout: null}),
           4,
           process => process.cancel(),
         ),
@@ -253,7 +255,7 @@ describe('maintainProcess()', () => {
       }
       await Promise.all([
         consumeAsyncIterable(
-          maintainProcess(serialization, pgHelper.pool, nameA, process, {clock}),
+          maintainProcess(logger, serialization, pgHelper.pool, nameA, process, {clock}),
           4,
           process => process.cancel(),
         ),
@@ -290,7 +292,7 @@ describe('maintainProcess()', () => {
       }
       await Promise.all([
         consumeAsyncIterable(
-          maintainProcess(serialization, pgHelper.pool, nameA, process, {clock}),
+          maintainProcess(logger, serialization, pgHelper.pool, nameA, process, {clock}),
           4,
           process => process.cancel(),
         ),
@@ -322,7 +324,7 @@ describe('maintainProcess()', () => {
 
       await appendEvents(serialization, pgHelper.client, streamTypeA, streamInstanceA, 0, [eventA, eventB])
       await consumeAsyncIterable(
-        maintainProcess(serialization, pgHelper.pool, nameA, process),
+        maintainProcess(logger, serialization, pgHelper.pool, nameA, process),
         2,
         process => process.cancel(),
       )
@@ -331,7 +333,7 @@ describe('maintainProcess()', () => {
     it('should process new events in the correct order', async () => {
       await Promise.all([
         consumeAsyncIterable(
-          maintainProcess(serialization, pgHelper.pool, nameA, process, {timeout: null}),
+          maintainProcess(logger, serialization, pgHelper.pool, nameA, process, {timeout: null}),
           2,
           process => process.cancel(),
         ),
@@ -359,7 +361,7 @@ describe('maintainProcess()', () => {
         },
       }
       const maintain = () => consumeAsyncIterable(
-        maintainProcess(serialization, pgHelper.pool, nameA, process, {timeout: null}),
+        maintainProcess(logger, serialization, pgHelper.pool, nameA, process, {timeout: null}),
         2,
         process => process.cancel(),
       )

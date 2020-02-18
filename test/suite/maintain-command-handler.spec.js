@@ -6,6 +6,7 @@ const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
 const {asyncIterableToArray, consumeAsyncIterable} = require('../helper/async.js')
 const {createClock} = require('../helper/clock.js')
+const {createLogger} = require('../helper/logging.js')
 const {createTestHelper} = require('../helper/pg.js')
 
 describe('maintainCommandHandler()', () => {
@@ -16,6 +17,7 @@ describe('maintainCommandHandler()', () => {
     await initializeSchema(pgHelper.client)
   })
 
+  const logger = createLogger()
   const nameA = 'aggregate-name-a'
   const instanceA = 'aggregate-instance-a'
   const sourceA = 'command-source-a'
@@ -32,6 +34,7 @@ describe('maintainCommandHandler()', () => {
 
   beforeEach(async () => {
     handleCommand = createCommandHandler(
+      logger,
       serialization,
       {
         [nameA]: {
@@ -55,7 +58,7 @@ describe('maintainCommandHandler()', () => {
   describe('before iteration', () => {
     it('should support cancellation', async () => {
       await executeCommands(serialization, pgHelper.client, sourceA, [commandA, commandB])
-      await maintainCommandHandler(serialization, pgHelper.client, handleCommand).cancel()
+      await maintainCommandHandler(logger, serialization, pgHelper.client, handleCommand).cancel()
       const [events] = await asyncIterableToArray(readEvents(serialization, pgHelper.client))
 
       expect(events).toHaveLength(0)
@@ -69,7 +72,7 @@ describe('maintainCommandHandler()', () => {
 
     it('should handle commands', async () => {
       await consumeAsyncIterable(
-        maintainCommandHandler(serialization, pgHelper.pool, handleCommand),
+        maintainCommandHandler(logger, serialization, pgHelper.pool, handleCommand),
         2,
         commands => commands.cancel(),
       )
@@ -103,7 +106,7 @@ describe('maintainCommandHandler()', () => {
         },
       }
 
-      const commands = maintainCommandHandler(serialization, pool, handleCommand)
+      const commands = maintainCommandHandler(logger, serialization, pool, handleCommand)
 
       await expect(consumeAsyncIterable(commands, 1)).rejects.toThrow('Unable to handle command-type-a command')
       expect(releases[1]).toHaveBeenCalled()
@@ -114,7 +117,7 @@ describe('maintainCommandHandler()', () => {
     it('should handle new commands when relying solely on notifications', async () => {
       await Promise.all([
         consumeAsyncIterable(
-          maintainCommandHandler(serialization, pgHelper.pool, handleCommand, {timeout: null}),
+          maintainCommandHandler(logger, serialization, pgHelper.pool, handleCommand, {timeout: null}),
           4,
           commands => commands.cancel(),
         ),
@@ -135,7 +138,7 @@ describe('maintainCommandHandler()', () => {
 
       await Promise.all([
         consumeAsyncIterable(
-          maintainCommandHandler(serialization, pgHelper.pool, handleCommand, {clock}),
+          maintainCommandHandler(logger, serialization, pgHelper.pool, handleCommand, {clock}),
           4,
           commands => commands.cancel(),
         ),
@@ -164,7 +167,7 @@ describe('maintainCommandHandler()', () => {
 
       await Promise.all([
         consumeAsyncIterable(
-          maintainCommandHandler(serialization, pgHelper.pool, handleCommand, {clock}),
+          maintainCommandHandler(logger, serialization, pgHelper.pool, handleCommand, {clock}),
           4,
           commands => commands.cancel(),
         ),
@@ -185,7 +188,7 @@ describe('maintainCommandHandler()', () => {
     beforeEach(async () => {
       await executeCommands(serialization, pgHelper.client, sourceA, [commandA, commandB])
       await consumeAsyncIterable(
-        maintainCommandHandler(serialization, pgHelper.pool, handleCommand),
+        maintainCommandHandler(logger, serialization, pgHelper.pool, handleCommand),
         2,
         commands => commands.cancel(),
       )
@@ -194,7 +197,7 @@ describe('maintainCommandHandler()', () => {
     it('should handle only unhandled commands', async () => {
       await Promise.all([
         consumeAsyncIterable(
-          maintainCommandHandler(serialization, pgHelper.pool, handleCommand, {timeout: null}),
+          maintainCommandHandler(logger, serialization, pgHelper.pool, handleCommand, {timeout: null}),
           2,
           commands => commands.cancel(),
         ),
@@ -214,7 +217,7 @@ describe('maintainCommandHandler()', () => {
   describe('when multiple workers try handle commands', () => {
     it('should cooperatively handle commands using a single worker at a time', async () => {
       const maintain = () => consumeAsyncIterable(
-        maintainCommandHandler(serialization, pgHelper.pool, handleCommand, {timeout: null}),
+        maintainCommandHandler(logger, serialization, pgHelper.pool, handleCommand, {timeout: null}),
         2,
         commands => commands.cancel(),
       )

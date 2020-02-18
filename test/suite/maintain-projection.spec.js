@@ -4,6 +4,7 @@ const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
 const {consumeAsyncIterable} = require('../helper/async.js')
 const {createClock} = require('../helper/clock.js')
+const {createLogger} = require('../helper/logging.js')
 const {createTestHelper} = require('../helper/pg.js')
 
 describe('maintainProjection()', () => {
@@ -14,6 +15,7 @@ describe('maintainProjection()', () => {
     await initializeSchema(pgHelper.client)
   })
 
+  const logger = createLogger()
   const projectionQuery = 'SELECT * FROM recluse.test_projection'
   const nameA = 'projection-name-a'
   const streamTypeA = 'stream-type-a'
@@ -54,7 +56,7 @@ describe('maintainProjection()', () => {
 
   describe('before iteration', () => {
     it('should support cancellation', async () => {
-      await maintainProjection(serialization, pgHelper.client, nameA, projection).cancel()
+      await maintainProjection(logger, serialization, pgHelper.client, nameA, projection).cancel()
 
       expect(await pgHelper.query(projectionQuery)).toHaveProperty('rowCount', 0)
     })
@@ -67,7 +69,7 @@ describe('maintainProjection()', () => {
 
     it('should apply the events in the correct order', async () => {
       await consumeAsyncIterable(
-        maintainProjection(serialization, pgHelper.pool, nameA, projection),
+        maintainProjection(logger, serialization, pgHelper.pool, nameA, projection),
         2,
         projection => projection.cancel(),
         (value, i) => expect(value).toBe(i),
@@ -82,7 +84,7 @@ describe('maintainProjection()', () => {
     it('should handle errors while applying events', async () => {
       const error = new Error('You done goofed')
       const applyEvent = async () => { throw error }
-      const projection = maintainProjection(serialization, pgHelper.pool, nameA, {applyEvent})
+      const projection = maintainProjection(logger, serialization, pgHelper.pool, nameA, {applyEvent})
 
       await expect(consumeAsyncIterable(projection, 1)).rejects.toThrow(error)
 
@@ -92,7 +94,7 @@ describe('maintainProjection()', () => {
     it('should be able to apply new events when relying solely on notifications', async () => {
       await Promise.all([
         consumeAsyncIterable(
-          maintainProjection(serialization, pgHelper.pool, nameA, projection, {timeout: null}),
+          maintainProjection(logger, serialization, pgHelper.pool, nameA, projection, {timeout: null}),
           4,
           projection => projection.cancel(),
         ),
@@ -113,7 +115,7 @@ describe('maintainProjection()', () => {
 
       await Promise.all([
         consumeAsyncIterable(
-          maintainProjection(serialization, pgHelper.pool, nameA, projection, {clock}),
+          maintainProjection(logger, serialization, pgHelper.pool, nameA, projection, {clock}),
           4,
           projection => projection.cancel(),
         ),
@@ -142,7 +144,7 @@ describe('maintainProjection()', () => {
 
       await Promise.all([
         consumeAsyncIterable(
-          maintainProjection(serialization, pgHelper.pool, nameA, projection, {clock}),
+          maintainProjection(logger, serialization, pgHelper.pool, nameA, projection, {clock}),
           4,
           projection => projection.cancel(),
         ),
@@ -163,7 +165,7 @@ describe('maintainProjection()', () => {
     beforeEach(async () => {
       await appendEvents(serialization, pgHelper.client, streamTypeA, streamInstanceA, 0, [eventA, eventB])
       await consumeAsyncIterable(
-        maintainProjection(serialization, pgHelper.pool, nameA, projection),
+        maintainProjection(logger, serialization, pgHelper.pool, nameA, projection),
         2,
         projection => projection.cancel(),
       )
@@ -172,7 +174,7 @@ describe('maintainProjection()', () => {
     it('should apply new events in the correct order', async () => {
       await Promise.all([
         consumeAsyncIterable(
-          maintainProjection(serialization, pgHelper.pool, nameA, projection, {timeout: null}),
+          maintainProjection(logger, serialization, pgHelper.pool, nameA, projection, {timeout: null}),
           2,
           projection => projection.cancel(),
         ),
@@ -192,7 +194,7 @@ describe('maintainProjection()', () => {
   describe('when multiple workers try to maintain the same projection', () => {
     it('should cooperatively apply events using a single worker at a time', async () => {
       const maintain = () => consumeAsyncIterable(
-        maintainProjection(serialization, pgHelper.pool, nameA, projection, {timeout: null}),
+        maintainProjection(logger, serialization, pgHelper.pool, nameA, projection, {timeout: null}),
         2,
         projection => projection.cancel(),
       )

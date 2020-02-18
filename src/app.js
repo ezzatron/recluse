@@ -1,6 +1,6 @@
 const {systemClock} = require('./clock.js')
 const {createCommandHandler, maintainCommandHandler} = require('./command-handler.js')
-const {createLogger} = require('./logging.js')
+const {createLoggerFactory} = require('./logging.js')
 const {createPool} = require('./pg.js')
 const {maintainProcess} = require('./process.js')
 const {maintainProjection} = require('./projection.js')
@@ -40,10 +40,12 @@ function createRun (spec) {
 
     const {
       clock = systemClock,
-      logger = createLogger(env),
+      createLogger = createLoggerFactory(env),
       pgConfig = {},
       serialization = jsonSerialization,
     } = options
+
+    const logger = createLogger('main')
 
     logger.info(`Running ${name}`)
 
@@ -57,29 +59,48 @@ function createRun (spec) {
       pgClient.release()
     }
 
-    const maintainOptions = {clock}
-
+    const commandHandlerThreadType = 'command-handler'
+    const commandHandlerLogger = createLogger(commandHandlerThreadType)
     const commandHandlerThread = [
-      'command-handler',
+      commandHandlerThreadType,
       maintainCommandHandler(
+        commandHandlerLogger,
         serialization,
         pgPool,
-        createCommandHandler(serialization, aggregates, integrations),
-        maintainOptions,
+        createCommandHandler(commandHandlerLogger, serialization, aggregates, integrations),
+        {clock},
       ),
     ]
 
     const processThreads = Object.entries(processes).map(([name, process]) => {
+      const type = `process.${name}`
+
       return [
-        `process.${name}`,
-        maintainProcess(serialization, pgPool, name, process, maintainOptions),
+        type,
+        maintainProcess(
+          createLogger(type),
+          serialization,
+          pgPool,
+          name,
+          process,
+          {clock},
+        ),
       ]
     })
 
     const projectionThreads = Object.entries(projections).map(([name, projection]) => {
+      const type = `projection.${name}`
+
       return [
-        `projection.${name}`,
-        maintainProjection(serialization, pgPool, name, projection, maintainOptions),
+        type,
+        maintainProjection(
+          createLogger(type),
+          serialization,
+          pgPool,
+          name,
+          projection,
+          {clock},
+        ),
       ]
     })
 
@@ -112,8 +133,8 @@ function createRun (spec) {
     }
 
     Promise.all(runners).then(
-      () => die(0, 'Stopping'),
-      error => die(1, `Stopping: ${error.stack}`),
+      () => die(0, `Stopping ${name}`),
+      error => die(1, `Stopping ${name}: ${error.stack}`),
     )
 
     return async function stop () {

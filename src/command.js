@@ -34,11 +34,12 @@ function readCommands (serialization, pgClient, id = 0) {
   ))
 }
 
-function readUnhandledCommandsContinuously (serialization, pgClient, options = {}) {
+function readUnhandledCommandsContinuously (logger, serialization, pgClient, options = {}) {
   const {unserialize} = serialization
   const {clock, timeout} = options
 
   return continuousQuery(
+    logger,
     pgClient,
     'SELECT * FROM recluse.command WHERE handled_at IS NULL AND id >= $1 ORDER BY id',
     CHANNEL,

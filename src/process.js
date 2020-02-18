@@ -7,14 +7,16 @@ module.exports = {
   maintainProcess,
 }
 
-function maintainProcess (serialization, pgPool, name, process, options = {}) {
+function maintainProcess (logger, serialization, pgPool, name, process, options = {}) {
   const {copy} = serialization
   const processType = `process.${name}`
   const {commandTypes, createInitialState, eventTypes, handleEvent, routeEvent} = process
   const {timeout, clock} = options
 
   async function applyEvent (pgClient, event) {
-    if (!eventTypes.includes(event.type)) return false
+    const {type: eventType} = event
+
+    if (!eventTypes.includes(eventType)) return false
 
     const instance = routeEvent(event)
 
@@ -30,6 +32,7 @@ function maintainProcess (serialization, pgPool, name, process, options = {}) {
           throw new Error(`Process ${name} cannot execute ${commandType} commands`)
         }
 
+        logger.debug(`Recording ${commandType} command from ${processType}`)
         executedCommands.push(command)
       })
     }
@@ -39,18 +42,31 @@ function maintainProcess (serialization, pgPool, name, process, options = {}) {
       async () => readProcessState(serialization, pgClient, name, processType, instance, createInitialState),
     )
 
+    logger.debug(`Handling ${eventType} event with ${processType}`)
     await handleEvent({event, executeCommands, readState, updateState})
+
+    logger.debug(`Executing ${executedCommands.length} commands for ${processType}`)
     await executeCommandsRaw(serialization, pgClient, processType, executedCommands)
 
     if (isUpdated()) {
+      logger.debug(`Writing state changes caused by ${eventType} in ${processType}`)
       const state = await getState()
       await writeState(serialization, pgClient, name, processType, instance, state)
+    } else {
+      logger.debug(`No state changes caused by ${eventType} in ${processType}`)
     }
 
     return true
   }
 
-  return maintainProjection(serialization, pgPool, processType, {applyEvent}, {clock, timeout, type: processType})
+  return maintainProjection(
+    logger,
+    serialization,
+    pgPool,
+    processType,
+    {applyEvent},
+    {clock, timeout, type: processType},
+  )
 }
 
 async function readProcessState (serialization, pgClient, name, processType, instance, createInitialState) {

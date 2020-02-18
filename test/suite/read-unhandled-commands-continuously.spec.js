@@ -2,6 +2,7 @@ const {executeCommands, readUnhandledCommandsContinuously} = require('../../src/
 const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
 const {consumeAsyncIterable} = require('../helper/async.js')
+const {createLogger} = require('../helper/logging.js')
 const {createTestHelper, TIME_PATTERN} = require('../helper/pg.js')
 
 describe('readUnhandledCommandsContinuously()', () => {
@@ -12,6 +13,7 @@ describe('readUnhandledCommandsContinuously()', () => {
     await initializeSchema(pgHelper.client)
   })
 
+  const logger = createLogger()
   const sourceA = 'command-source-a'
   const commandTypeA = 'command-type-a'
   const commandTypeB = 'command-type-b'
@@ -24,7 +26,7 @@ describe('readUnhandledCommandsContinuously()', () => {
 
   describe('with no commands', () => {
     it('should support cancellation', async () => {
-      expect(await readUnhandledCommandsContinuously(serialization, pgHelper.client).cancel()).toBeUndefined()
+      expect(await readUnhandledCommandsContinuously(logger, serialization, pgHelper.client).cancel()).toBeUndefined()
     })
   })
 
@@ -44,7 +46,7 @@ describe('readUnhandledCommandsContinuously()', () => {
       ]
 
       await consumeAsyncIterable(
-        readUnhandledCommandsContinuously(serialization, pgHelper.client),
+        readUnhandledCommandsContinuously(logger, serialization, pgHelper.client),
         expected.length,
         commands => commands.cancel(),
         wrapper => {
@@ -70,7 +72,7 @@ describe('readUnhandledCommandsContinuously()', () => {
       ]
 
       await consumeAsyncIterable(
-        readUnhandledCommandsContinuously(serialization, pgHelper.client, {id: 1}),
+        readUnhandledCommandsContinuously(logger, serialization, pgHelper.client, {id: 1}),
         expected.length,
         commands => commands.cancel(),
         wrapper => {

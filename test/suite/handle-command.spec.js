@@ -3,6 +3,7 @@ const {readEventsByStream} = require('../../src/event.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
 const {asyncIterableToArray} = require('../helper/async.js')
+const {createLogger} = require('../helper/logging.js')
 const {createTestHelper} = require('../helper/pg.js')
 
 describe('handleCommand()', () => {
@@ -13,6 +14,7 @@ describe('handleCommand()', () => {
     await initializeSchema(pgHelper.client)
   })
 
+  const logger = createLogger()
   const aggregateNameA = 'aggregate-name-a'
   const aggregateNameB = 'aggregate-name-b'
   const aggregateStreamA = `aggregate.${aggregateNameA}`
@@ -46,26 +48,33 @@ describe('handleCommand()', () => {
   })
 
   describe('when creating', () => {
-    it('should throw when the serialization is not supplied', async () => {
+    it('should throw when the logger is not supplied', async () => {
       const operation = () => createCommandHandler()
+
+      expect(operation).toThrow('Invalid logger')
+    })
+
+    it('should throw when the serialization is not supplied', async () => {
+      const operation = () => createCommandHandler(logger)
 
       expect(operation).toThrow('Invalid serialization')
     })
 
     it('should throw when aggregates are not supplied', async () => {
-      const operation = () => createCommandHandler(serialization)
+      const operation = () => createCommandHandler(logger, serialization)
 
       expect(operation).toThrow('Invalid aggregates')
     })
 
     it('should throw when integrations are not supplied', async () => {
-      const operation = () => createCommandHandler(serialization, {})
+      const operation = () => createCommandHandler(logger, serialization, {})
 
       expect(operation).toThrow('Invalid integrations')
     })
 
     it('should throw when multiple aggregates attempt to handle the same command type', async () => {
       const operation = () => createCommandHandler(
+        logger,
         serialization,
         {
           [aggregateNameA]: {
@@ -86,6 +95,7 @@ describe('handleCommand()', () => {
 
     it('should throw when multiple integrations attempt to handle the same command type', async () => {
       const operation = () => createCommandHandler(
+        logger,
         serialization,
         {
           [aggregateNameA]: {
@@ -106,6 +116,7 @@ describe('handleCommand()', () => {
 
     it('should throw when aggregates and integrations attempt to handle the same command type', async () => {
       const operation = () => createCommandHandler(
+        logger,
         serialization,
         {},
         {
@@ -128,6 +139,7 @@ describe('handleCommand()', () => {
   describe('when handling commands', () => {
     it('should throw when handling commands with unexpected types', async () => {
       const handleCommand = createCommandHandler(
+        logger,
         serialization,
         {
           [aggregateNameA]: emptyAggregate,
@@ -146,6 +158,7 @@ describe('handleCommand()', () => {
 
     it('should throw when handling commands that cannot be routed', async () => {
       const handleCommand = createCommandHandler(
+        logger,
         serialization,
         {
           [aggregateNameA]: {
@@ -170,6 +183,7 @@ describe('handleCommand()', () => {
       const createCommandB = increment => ({type: commandTypeB, data: {increment}})
       const instance = 'aggregate-instance-a'
       const handleCommand = createCommandHandler(
+        logger,
         serialization,
         {
           [aggregateNameA]: {
@@ -220,6 +234,7 @@ describe('handleCommand()', () => {
       const createCommandA = () => ({type: commandTypeA})
       const instance = 'aggregate-instance-a'
       const handleCommand = createCommandHandler(
+        logger,
         serialization,
         {
           [aggregateNameA]: {
@@ -262,6 +277,7 @@ describe('handleCommand()', () => {
       const instance = 'aggregate-instance-a'
       const notOkay = new Error('Not okay')
       const handleCommand = createCommandHandler(
+        logger,
         serialization,
         {
           [aggregateNameA]: {
@@ -310,6 +326,7 @@ describe('handleCommand()', () => {
       const instanceA = 'aggregate-instance-a'
       const instanceB = 'aggregate-instance-b'
       const handleCommand = createCommandHandler(
+        logger,
         serialization,
         {
           [aggregateNameA]: {
@@ -360,6 +377,7 @@ describe('handleCommand()', () => {
       const instanceA = 'aggregate-instance-a'
       const instanceB = 'aggregate-instance-b'
       const handleCommand = createCommandHandler(
+        logger,
         serialization,
         {
           [aggregateNameA]: {
@@ -415,6 +433,7 @@ describe('handleCommand()', () => {
 
     it('should throw when recording events with unexpected types', async () => {
       const handleCommand = createCommandHandler(
+        logger,
         serialization,
         {
           [aggregateNameA]: {
@@ -440,6 +459,7 @@ describe('handleCommand()', () => {
       const createCommandA = data => ({type: commandTypeA, data})
       const createCommandB = data => ({type: commandTypeB, data})
       const handleCommand = createCommandHandler(
+        logger,
         serialization,
         {},
         {
@@ -479,6 +499,7 @@ describe('handleCommand()', () => {
       const createCommandA = data => ({type: commandTypeA, data})
       const createCommandB = data => ({type: commandTypeB, data})
       const handleCommand = createCommandHandler(
+        logger,
         serialization,
         {},
         {
@@ -526,6 +547,7 @@ describe('handleCommand()', () => {
 
     it('should throw when recording events with unexpected types', async () => {
       const handleCommand = createCommandHandler(
+        logger,
         serialization,
         {},
         {

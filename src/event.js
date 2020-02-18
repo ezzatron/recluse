@@ -95,11 +95,12 @@ function readEventsByStream (serialization, pgClient, type, instance, start = 0,
   return pgClient.query(asyncQuery(text, params, marshal.bind(null, unserialize)))
 }
 
-function readEventsContinuously (serialization, pgClient, options = {}) {
+function readEventsContinuously (logger, serialization, pgClient, options = {}) {
   const {unserialize} = serialization
   const {clock, start, timeout} = options
 
   return continuousQuery(
+    logger,
     pgClient,
     'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
     CHANNEL,

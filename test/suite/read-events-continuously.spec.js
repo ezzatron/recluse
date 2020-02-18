@@ -2,6 +2,7 @@ const {appendEvents, readEventsContinuously} = require('../../src/event.js')
 const {initializeSchema} = require('../../src/schema.js')
 const {serialization} = require('../../src/serialization/json.js')
 const {consumeAsyncIterable} = require('../helper/async.js')
+const {createLogger} = require('../helper/logging.js')
 const {createTestHelper, TIME_PATTERN} = require('../helper/pg.js')
 
 describe('readEventsContinuously()', () => {
@@ -12,6 +13,7 @@ describe('readEventsContinuously()', () => {
     await initializeSchema(pgHelper.client)
   })
 
+  const logger = createLogger()
   const typeA = 'stream-type-a'
   const instanceA = 'stream-instance-a'
   const instanceB = 'stream-instance-b'
@@ -24,7 +26,7 @@ describe('readEventsContinuously()', () => {
 
   describe('with no events', () => {
     it('should support cancellation', async () => {
-      expect(await readEventsContinuously(serialization, pgHelper.client).cancel()).toBeUndefined()
+      expect(await readEventsContinuously(logger, serialization, pgHelper.client).cancel()).toBeUndefined()
     })
   })
 
@@ -44,7 +46,7 @@ describe('readEventsContinuously()', () => {
       ]
 
       await consumeAsyncIterable(
-        readEventsContinuously(serialization, pgHelper.client),
+        readEventsContinuously(logger, serialization, pgHelper.client),
         expected.length,
         events => events.cancel(),
         wrapper => {
@@ -63,7 +65,7 @@ describe('readEventsContinuously()', () => {
       ]
 
       await consumeAsyncIterable(
-        readEventsContinuously(serialization, pgHelper.client, {start: 1}),
+        readEventsContinuously(logger, serialization, pgHelper.client, {start: 1}),
         expected.length,
         events => events.cancel(),
         wrapper => {
@@ -84,7 +86,7 @@ describe('readEventsContinuously()', () => {
       const expected = [eventA, eventB, eventC, eventD]
 
       await consumeAsyncIterable(
-        readEventsContinuously(serialization, pgHelper.client),
+        readEventsContinuously(logger, serialization, pgHelper.client),
         expected.length,
         events => events.cancel(),
         ({event}) => expect(event).toEqual(expected.shift()),

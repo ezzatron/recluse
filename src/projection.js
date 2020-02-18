@@ -7,9 +7,9 @@ module.exports = {
   maintainProjection,
 }
 
-function maintainProjection (serialization, pgPool, name, projection, options = {}) {
+function maintainProjection (logger, serialization, pgPool, name, projection, options = {}) {
   const {clock, timeout, type = `projection.${name}`} = options
-  const iterator = createProjectionIterator(serialization, pgPool, type, projection, timeout, clock)
+  const iterator = createProjectionIterator(logger, serialization, pgPool, type, projection, timeout, clock)
 
   return {
     [Symbol.asyncIterator]: () => iterator,
@@ -17,7 +17,7 @@ function maintainProjection (serialization, pgPool, name, projection, options = 
   }
 }
 
-function createProjectionIterator (serialization, pgPool, type, projection, timeout, clock) {
+function createProjectionIterator (logger, serialization, pgPool, type, projection, timeout, clock) {
   const {applyEvent} = projection
   let id, start, iterator, pgClient
   let isLocked = false
@@ -25,18 +25,33 @@ function createProjectionIterator (serialization, pgPool, type, projection, time
   return {
     async next () {
       if (!iterator) {
+        logger.debug('Acquiring Postgres client for event iteration')
         pgClient = await pgPool.connect()
 
+        logger.debug('Acquiring session lock for projection maintenance')
         id = await readProjectionId(pgClient, type)
         await acquireSessionLock(pgClient, LOCK_NAMESPACE, id)
         isLocked = true
+        logger.debug('Acquired session lock for projection maintenance')
 
+        logger.debug('Creating event iterator')
         start = await readProjectionNext(pgClient, id)
-        iterator = acquireAsyncIterator(readEventsContinuously(serialization, pgClient, {start, timeout, clock}))
+        iterator = acquireAsyncIterator(
+          readEventsContinuously(logger, serialization, pgClient, {start, timeout, clock}),
+        )
       }
 
-      const {value: {event}} = await iterator.next()
-      const value = await apply(pgPool, type, applyEvent, start++, event)
+      logger.debug('Awaiting event')
+      const {done, value: wrapper} = await iterator.next()
+
+      if (done) {
+        logger.debug('Event iterator ended, stopping projection maintenance')
+
+        return {done: true}
+      }
+
+      const {event} = wrapper
+      const value = await apply(logger, pgPool, type, applyEvent, start++, event)
 
       return {done: false, value}
     },
@@ -44,45 +59,74 @@ function createProjectionIterator (serialization, pgPool, type, projection, time
     async cancel () {
       const errors = []
 
+      logger.debug('Cancelling projection maintainer')
+
       if (iterator) {
+        logger.debug('Cancelling event iterator')
+
         try {
           await iterator.cancel()
         } catch (error) {
           errors.push(error)
+          logger.warn(`Failed to cancel event iterator: ${error.stack}`)
         }
+      } else {
+        logger.debug('No event iterator to cancel')
       }
 
       if (isLocked) {
+        logger.debug('Releasing session lock for projection maintenance')
+
         try {
           await releaseSessionLock(pgClient, LOCK_NAMESPACE)
         } catch (error) {
           errors.push(error)
+          logger.warn(`Failed to release session lock for projection maintenance: ${error.stack}`)
         }
+      } else {
+        logger.debug('A session lock for projection maintenance was never acquired')
       }
 
       if (pgClient) {
+        logger.debug('Releasing Postgres client for projection maintenance')
+
         try {
           pgClient.release()
         } catch (error) {
           errors.push(error)
+          logger.warn(`Failed to release Postgres client for projection maintenance: ${error.stack}`)
         }
+      } else {
+        logger.debug('A Postgres client for projection maintenance was never acquired')
       }
 
       if (errors.length > 0) throw errors[0]
+
+      logger.debug('Cancelled projection maintainer')
     },
   }
 }
 
-async function apply (pgPool, type, applyEvent, offset, event) {
+async function apply (logger, pgPool, type, applyEvent, offset, event) {
+  const {type: eventType} = event
+
+  logger.debug(`Consuming ${eventType} event`)
+
+  logger.debug(`Acquiring Postgres client to handle ${eventType} event`)
   const pgClient = await pgPool.connect()
 
   try {
-    return inTransaction(pgClient, async () => {
+    return await inTransaction(pgClient, async () => {
       await incrementProjection(pgClient, type, offset)
 
-      return applyEvent(pgClient, event)
+      const result = await applyEvent(pgClient, event)
+
+      if (result) logger.info(`Applied ${eventType} event with ${type}`)
+
+      return result
     })
   } finally {
+    logger.debug(`Releasing Postgres client used to handle ${eventType} event`)
     pgClient.release()
   }
 }

@@ -5,7 +5,7 @@ module.exports = {
   handleCommandWithAggregate,
 }
 
-async function handleCommandWithAggregate (serialization, pgClient, name, aggregate, command) {
+async function handleCommandWithAggregate (logger, serialization, pgClient, name, aggregate, command) {
   const {copy} = serialization
   const {applyEvent, createInitialState, eventTypes, handleCommand, routeCommand} = aggregate
   const {type} = command
@@ -33,6 +33,7 @@ async function handleCommandWithAggregate (serialization, pgClient, name, aggreg
     }
   }
 
+  logger.info(`Handling ${type} command with ${streamType}`)
   await handleCommand({command, readState, recordEvents})
 
   return appendEvents(serialization, pgClient, streamType, instance, next, recordedEvents)
