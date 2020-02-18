@@ -4,4 +4,10 @@ const {createApp} = require('../../../src/app.js')
 const createBankSpec = require('../../../test/fixture/app/bank/index.js')
 const {runAsync} = require('./util.js')
 
-runAsync(createApp(createBankSpec('bank')).run())
+runAsync(createApp(createBankSpec('bank')).run().then(stop => {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve(stop())
+    }, 3000)
+  })
+}))
