@@ -1,4 +1,3 @@
-const {allSerial} = require('./async.js')
 const {readEventsContinuously} = require('./event.js')
 const {acquireAsyncIterator} = require('./iterator.js')
 const {PROJECTION: LOCK_NAMESPACE} = require('./lock.js')
@@ -43,11 +42,33 @@ function createProjectionIterator (serialization, pgPool, type, projection, time
     },
 
     async cancel () {
-      await allSerial(
-        async () => { if (iterator) await iterator.cancel() },
-        async () => { if (isLocked) await releaseSessionLock(pgClient, LOCK_NAMESPACE, id) },
-        () => { if (pgClient) pgClient.release() },
-      )
+      const errors = []
+
+      if (iterator) {
+        try {
+          await iterator.cancel()
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+
+      if (isLocked) {
+        try {
+          await releaseSessionLock(pgClient, LOCK_NAMESPACE)
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+
+      if (pgClient) {
+        try {
+          pgClient.release()
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+
+      if (errors.length > 0) throw errors[0]
     },
   }
 }

@@ -1,7 +1,6 @@
 const {Pool, types} = require('pg')
 const Cursor = require('pg-cursor')
 
-const {allSerial} = require('./async.js')
 const {systemClock} = require('./clock.js')
 const {acquireAsyncIterator} = require('./iterator.js')
 
@@ -201,11 +200,33 @@ function createContinuousQueryIterator (
     },
 
     async cancel () {
-      await allSerial(
-        async () => { if (iterator) await iterator.cancel() },
-        async () => { if (isListening) await pgClient.query(`UNLISTEN ${channel}`) },
-        () => { if (timeoutId) clock.clearTimeout(timeoutId) },
-      )
+      const errors = []
+
+      if (iterator) {
+        try {
+          await iterator.cancel()
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+
+      if (isListening) {
+        try {
+          await pgClient.query(`UNLISTEN ${channel}`)
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+
+      if (timeoutId) {
+        try {
+          clock.clearTimeout(timeoutId)
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+
+      if (errors.length > 0) throw errors[0]
     },
   }
 }

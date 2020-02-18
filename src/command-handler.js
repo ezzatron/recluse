@@ -1,5 +1,4 @@
 const {handleCommandWithAggregate} = require('./aggregate.js')
-const {allSerial} = require('./async.js')
 const {readUnhandledCommandsContinuously} = require('./command.js')
 const {handleCommandWithIntegration} = require('./integration.js')
 const {acquireAsyncIterator} = require('./iterator.js')
@@ -69,11 +68,33 @@ function createCommandIterator (serialization, pgPool, handleCommand, timeout, c
     },
 
     async cancel () {
-      await allSerial(
-        async () => { if (iterator) await iterator.cancel() },
-        async () => { if (isLocked) await releaseSessionLock(pgClient, LOCK_NAMESPACE) },
-        () => { if (pgClient) pgClient.release() },
-      )
+      const errors = []
+
+      if (iterator) {
+        try {
+          await iterator.cancel()
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+
+      if (isLocked) {
+        try {
+          await releaseSessionLock(pgClient, LOCK_NAMESPACE)
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+
+      if (pgClient) {
+        try {
+          pgClient.release()
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+
+      if (errors.length > 0) throw errors[0]
     },
   }
 }
