@@ -8,7 +8,7 @@ module.exports = {
   TIME_PATTERN: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d+\+00$/,
 }
 
-function createTestHelper () {
+function createTestHelper (userAfterEach) {
   const {PGHOST, PGPORT, PGUSER, PGPASSWORD} = process.env
   const config = {
     host: PGHOST || 'localhost',
@@ -38,6 +38,8 @@ function createTestHelper () {
   })
 
   afterEach(async function pgTestHelperAfterEach () {
+    if (userAfterEach) await userAfterEach()
+
     await Promise.allSettled(schemas.map(schema => client.query(`DROP SCHEMA ${schema} CASCADE`)))
 
     for (const client of clients) {
