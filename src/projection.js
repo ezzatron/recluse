@@ -1,3 +1,4 @@
+const {CancelError, createCancelController} = require('./async.js')
 const {readEventsContinuously} = require('./event.js')
 const {acquireAsyncIterator} = require('./iterator.js')
 const {PROJECTION: LOCK_NAMESPACE} = require('./lock.js')
@@ -19,47 +20,61 @@ function maintainProjection (logger, serialization, pgPool, name, projection, op
 
 function createProjectionIterator (logger, serialization, pgPool, type, projection, timeout, clock) {
   const {applyEvent} = projection
+  const cancelController = createCancelController()
   let id, start, iterator, pgClient
   let isLocked = false
 
   return {
     async next () {
-      if (!iterator) {
-        logger.debug('Acquiring Postgres client for event iteration')
-        pgClient = await pgPool.connect()
+      try {
+        if (cancelController.isCancelled) return {done: true}
 
-        logger.debug('Acquiring session lock for projection maintenance')
-        id = await readProjectionId(pgClient, type)
-        await acquireSessionLock(pgClient, LOCK_NAMESPACE, id)
-        isLocked = true
-        logger.debug('Acquired session lock for projection maintenance')
+        if (!iterator) {
+          logger.debug('Acquiring Postgres client for event iteration')
+          pgClient = await cancelController.race(pgPool.connect())
 
-        logger.debug('Creating event iterator')
-        start = await readProjectionNext(pgClient, id)
-        iterator = acquireAsyncIterator(
-          readEventsContinuously(logger, serialization, pgClient, {start, timeout, clock}),
-        )
+          logger.debug('Acquiring session lock for projection maintenance')
+          id = await cancelController.race(readProjectionId(pgClient, type))
+          await cancelController.race(acquireSessionLock(pgClient, LOCK_NAMESPACE, id))
+          isLocked = true
+          logger.debug('Acquired session lock for projection maintenance')
+
+          logger.debug('Creating event iterator')
+          start = await cancelController.race(readProjectionNext(pgClient, id))
+          iterator = acquireAsyncIterator(
+            readEventsContinuously(logger, serialization, pgClient, {start, timeout, clock}),
+          )
+        }
+
+        logger.debug('Awaiting event')
+        const {done, value: wrapper} = await cancelController.race(iterator.next())
+
+        if (done) {
+          logger.debug('Event iterator ended, stopping projection maintenance')
+
+          return {done: true}
+        }
+
+        const {event} = wrapper
+        const value = await cancelController.race(apply(logger, pgPool, type, applyEvent, start++, event))
+
+        return {done: false, value}
+      } catch (error) {
+        if (error instanceof CancelError) {
+          logger.debug('Detected cancellation of projection maintenance')
+
+          return {done: true}
+        } else {
+          throw error
+        }
       }
-
-      logger.debug('Awaiting event')
-      const {done, value: wrapper} = await iterator.next()
-
-      if (done) {
-        logger.debug('Event iterator ended, stopping projection maintenance')
-
-        return {done: true}
-      }
-
-      const {event} = wrapper
-      const value = await apply(logger, pgPool, type, applyEvent, start++, event)
-
-      return {done: false, value}
     },
 
     async cancel () {
       const errors = []
 
       logger.debug('Cancelling projection maintainer')
+      cancelController.cancel()
 
       if (iterator) {
         logger.debug('Cancelling event iterator')

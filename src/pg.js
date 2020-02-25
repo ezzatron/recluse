@@ -126,25 +126,36 @@ async function waitForNotification (client, channel) {
 }
 
 function createCursorIterator (cursor, marshal = identity) {
+  const cancelController = createCancelController()
   let done = false
   let final
 
   return {
     async next () {
-      if (done) return {done, value: final}
+      try {
+        if (done) return {done, value: final}
 
-      const [rows, result] = await cursorRead(cursor, 1)
-      done = rows.length < 1
+        const [rows, result] = await cancelController.race(cursorRead(cursor, 1))
+        done = rows.length < 1
 
-      if (!done) return {done, value: marshal(rows[0])}
+        if (!done) return {done, value: marshal(rows[0])}
 
-      final = result
-      await cursorClose(cursor)
+        final = result
+        await cancelController.race(cursorClose(cursor))
 
-      return {done, value: final}
+        return {done, value: final}
+      } catch (error) {
+        if (error instanceof CancelError) {
+          return {done: true}
+        } else {
+          throw error
+        }
+      }
     },
 
     async cancel () {
+      cancelController.cancel()
+
       await cursorClose(cursor)
     },
   }
@@ -170,61 +181,69 @@ function createContinuousQueryIterator (
 
   return {
     async next () {
-      while (true) {
-        if (cancelController.isCancelled) return {done: true}
+      try {
+        while (true) {
+          if (cancelController.isCancelled) return {done: true}
 
-        if (!isListening) {
-          logger.debug(`Listening for Postgres notifications on ${channel}`)
-          await pgClient.query(`LISTEN ${channel}`)
-          isListening = true
-        }
-
-        if (!iterator) {
-          if (!nextNotification) {
-            nextNotification = waitForNotification(pgClient, channel)
-              .then(() => {
-                nextNotification = null
-              })
-              .catch(() => {}) // if this rejects, we just attempt another query anyway
+          if (!isListening) {
+            logger.debug(`Listening for Postgres notifications on ${channel}`)
+            await cancelController.race(pgClient.query(`LISTEN ${channel}`))
+            isListening = true
           }
 
-          logger.debug('Creating async query iterator')
-          iterator = acquireAsyncIterator(pgClient.query(asyncQuery(text, [next, ...extraValues], marshal)))
-        }
+          if (!iterator) {
+            if (!nextNotification) {
+              nextNotification = waitForNotification(pgClient, channel)
+                .then(() => {
+                  nextNotification = null
+                })
+                .catch(() => {}) // if this rejects, we just attempt another query anyway
+            }
 
-        logger.debug('Awaiting next async query result')
-        const result = await iterator.next()
+            logger.debug('Creating async query iterator')
+            iterator = acquireAsyncIterator(pgClient.query(asyncQuery(text, [next, ...extraValues], marshal)))
+          }
 
-        if (result.done) {
-          logger.debug('Reached end of async query results')
-        } else {
-          logger.debug('Returning received async query result')
-          next = nextOffset(result.value)
+          logger.debug('Awaiting next async query result')
+          const result = await cancelController.race(iterator.next())
 
-          return result
-        }
-
-        iterator = null
-        const waitFor = [nextNotification, cancelController.promise]
-
-        if (typeof timeout === 'number') {
-          waitFor.push(createTimeout(clock, timeout))
-          logger.debug(`Awaiting Postgres notification on ${channel}, or for ${timeout}ms to elapse`)
-        } else {
-          logger.debug(`Awaiting Postgres notification on ${channel}`)
-        }
-
-        try {
-          await Promise.race(waitFor)
-          logger.debug(`Received Postgres notification on ${channel}`)
-        } catch (error) {
-          if (error instanceof TimeoutError) {
-            logger.debug(`${timeout}ms elapsed`)
-          } else if (error instanceof CancelError) {
-            logger.debug('Detected cancellation')
+          if (result.done) {
+            logger.debug('Reached end of async query results')
           } else {
-            throw error
+            logger.debug('Returning received async query result')
+            next = nextOffset(result.value)
+
+            return result
           }
+
+          iterator = null
+          const waitFor = [nextNotification]
+
+          if (typeof timeout === 'number') {
+            waitFor.push(createTimeout(clock, timeout))
+            logger.debug(`Awaiting Postgres notification on ${channel}, or for ${timeout}ms to elapse`)
+          } else {
+            logger.debug(`Awaiting Postgres notification on ${channel}`)
+          }
+
+          try {
+            await cancelController.race(...waitFor)
+            logger.debug(`Received Postgres notification on ${channel}`)
+          } catch (error) {
+            if (error instanceof TimeoutError) {
+              logger.debug(`${timeout}ms elapsed`)
+            } else {
+              throw error
+            }
+          }
+        }
+      } catch (error) {
+        if (error instanceof CancelError) {
+          logger.debug('Detected cancellation of continuous query')
+
+          return {done: true}
+        } else {
+          throw error
         }
       }
     },

@@ -1,4 +1,5 @@
 const {handleCommandWithAggregate} = require('./aggregate.js')
+const {CancelError, createCancelController} = require('./async.js')
 const {readUnhandledCommandsContinuously} = require('./command.js')
 const {handleCommandWithIntegration} = require('./integration.js')
 const {acquireAsyncIterator} = require('./iterator.js')
@@ -48,44 +49,58 @@ function maintainCommandHandler (logger, serialization, pgPool, handleCommand, o
 }
 
 function createCommandIterator (logger, serialization, pgPool, handleCommand, timeout, clock) {
+  const cancelController = createCancelController()
   let iterator, pgClient
   let isLocked = false
 
   return {
     async next () {
-      if (!iterator) {
-        logger.debug('Acquiring Postgres client for command iteration')
-        pgClient = await pgPool.connect()
+      try {
+        if (cancelController.isCancelled) return {done: true}
 
-        logger.debug('Acquiring session lock for command handling')
-        await acquireSessionLock(pgClient, LOCK_NAMESPACE)
-        isLocked = true
-        logger.debug('Acquired session lock for command handling')
+        if (!iterator) {
+          logger.debug('Acquiring Postgres client for command iteration')
+          pgClient = await cancelController.race(pgPool.connect())
 
-        logger.debug('Creating command iterator')
-        iterator = acquireAsyncIterator(
-          readUnhandledCommandsContinuously(logger, serialization, pgClient, {timeout, clock}),
-        )
+          logger.debug('Acquiring session lock for command handling')
+          await cancelController.race(acquireSessionLock(pgClient, LOCK_NAMESPACE))
+          isLocked = true
+          logger.debug('Acquired session lock for command handling')
+
+          logger.debug('Creating command iterator')
+          iterator = acquireAsyncIterator(
+            readUnhandledCommandsContinuously(logger, serialization, pgClient, {timeout, clock}),
+          )
+        }
+
+        logger.debug('Awaiting command')
+        const {done, value: wrapper} = await cancelController.race(iterator.next())
+
+        if (done) {
+          logger.debug('Command iterator ended, stopping command handler')
+
+          return {done: true}
+        }
+
+        await cancelController.race(consumeCommand(logger, pgPool, handleCommand, wrapper))
+
+        return {done: false}
+      } catch (error) {
+        if (error instanceof CancelError) {
+          logger.debug('Detected cancellation of command handling')
+
+          return {done: true}
+        } else {
+          throw error
+        }
       }
-
-      logger.debug('Awaiting command')
-      const {done, value: wrapper} = await iterator.next()
-
-      if (done) {
-        logger.debug('Command iterator ended, stopping command handler')
-
-        return {done: true}
-      }
-
-      await consumeCommand(logger, pgPool, handleCommand, wrapper)
-
-      return {done: false}
     },
 
     async cancel () {
       const errors = []
 
       logger.debug('Cancelling command handler')
+      cancelController.cancel()
 
       if (iterator) {
         logger.debug('Cancelling command iterator')

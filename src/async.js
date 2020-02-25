@@ -37,6 +37,10 @@ function createCancelController () {
     rejectPromise(new CancelError())
   }
 
+  controller.race = function race (...promises) {
+    return Promise.race([controller, ...promises])
+  }
+
   return controller
 }
 
