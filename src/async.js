@@ -16,7 +16,7 @@ module.exports = {
   TimedOut,
 }
 
-async function createContext (options = {}) {
+async function createContext (logger, options = {}) {
   const {context, timeout} = options
   const doneHandlers = []
   let disconnectContext, doneError, donePromise, doneReject, timeoutId
