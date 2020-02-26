@@ -1,6 +1,6 @@
 const {handleCommandWithAggregate} = require('./aggregate.js')
-const {CancelError, createCancelController} = require('./async.js')
 const {readUnhandledCommandsContinuously} = require('./command.js')
+const {Canceled, createContext} = require('./context.js')
 const {handleCommandWithIntegration} = require('./integration.js')
 const {acquireAsyncIterator} = require('./iterator.js')
 const {COMMAND: LOCK_NAMESPACE} = require('./lock.js')
@@ -38,43 +38,47 @@ function createCommandHandler (logger, serialization, aggregates, integrations) 
   }
 }
 
-function maintainCommandHandler (logger, serialization, pgPool, handleCommand, options = {}) {
+function maintainCommandHandler (context, logger, serialization, pgPool, handleCommand, options = {}) {
   const {timeout, clock} = options
-  const iterator = createCommandIterator(logger, serialization, pgPool, handleCommand, timeout, clock)
+  const iterator = createCommandIterator(context, logger, serialization, pgPool, handleCommand, timeout, clock)
 
   return {
     [Symbol.asyncIterator]: () => iterator,
-    cancel: iterator.cancel,
   }
 }
 
-function createCommandIterator (logger, serialization, pgPool, handleCommand, timeout, clock) {
-  const cancelController = createCancelController()
+function createCommandIterator (context, logger, serialization, pgPool, handleCommand, timeout, clock) {
   let iterator, pgClient
-  let isLocked = false
 
   return {
     async next () {
       try {
-        if (cancelController.isCancelled) return {done: true}
-
         if (!iterator) {
-          logger.debug('Acquiring Postgres client for command iteration')
-          pgClient = await cancelController.race(pgPool.connect())
+          pgClient = await context.do(async () => {
+            logger.debug('Acquiring Postgres client for command iteration')
 
-          logger.debug('Acquiring session lock for command handling')
-          await cancelController.race(acquireSessionLock(pgClient, LOCK_NAMESPACE))
-          isLocked = true
-          logger.debug('Acquired session lock for command handling')
+            const pgClient = await pgPool.connect()
+            await context.onceDone(() => pgClient.release())
+
+            return pgClient
+          })
+
+          await context.do(async () => {
+            logger.debug('Acquiring session lock for command handling')
+            await acquireSessionLock(pgClient, LOCK_NAMESPACE)
+            logger.debug('Acquired session lock for command handling')
+
+            await context.onceDone(() => releaseSessionLock(pgClient, LOCK_NAMESPACE))
+          })
 
           logger.debug('Creating command iterator')
           iterator = acquireAsyncIterator(
-            readUnhandledCommandsContinuously(logger, serialization, pgClient, {timeout, clock}),
+            readUnhandledCommandsContinuously(context, logger, serialization, pgClient, {timeout, clock}),
           )
         }
 
         logger.debug('Awaiting command')
-        const {done, value: wrapper} = await cancelController.race(iterator.next())
+        const {done, value: wrapper} = await iterator.next()
 
         if (done) {
           logger.debug('Command iterator ended, stopping command handler')
@@ -82,82 +86,40 @@ function createCommandIterator (logger, serialization, pgPool, handleCommand, ti
           return {done: true}
         }
 
-        await cancelController.race(consumeCommand(logger, pgPool, handleCommand, wrapper))
+        await consumeCommand(context, logger, pgPool, handleCommand, wrapper)
 
         return {done: false}
       } catch (error) {
-        if (error instanceof CancelError) {
+        if (error instanceof Canceled) {
           logger.debug('Detected cancellation of command handling')
 
           return {done: true}
-        } else {
-          throw error
         }
+
+        throw error
       }
-    },
-
-    async cancel () {
-      const errors = []
-
-      logger.debug('Cancelling command handler')
-      cancelController.cancel()
-
-      if (iterator) {
-        logger.debug('Cancelling command iterator')
-
-        try {
-          await iterator.cancel()
-        } catch (error) {
-          errors.push(error)
-          logger.warn(`Failed to cancel command iterator: ${error.stack}`)
-        }
-      } else {
-        logger.debug('No command iterator to cancel')
-      }
-
-      if (isLocked) {
-        logger.debug('Releasing session lock for command handling')
-
-        try {
-          await releaseSessionLock(pgClient, LOCK_NAMESPACE)
-        } catch (error) {
-          errors.push(error)
-          logger.warn(`Failed to release session lock for command handling: ${error.stack}`)
-        }
-      } else {
-        logger.debug('The session lock for command handling was never acquired')
-      }
-
-      if (pgClient) {
-        logger.debug('Releasing Postgres client for command iteration')
-
-        try {
-          pgClient.release()
-        } catch (error) {
-          errors.push(error)
-          logger.warn(`Failed to release Postgres client for command iteration: ${error.stack}`)
-        }
-      } else {
-        logger.debug('A Postgres client for command iteration was never acquired')
-      }
-
-      if (errors.length > 0) throw errors[0]
-
-      logger.debug('Cancelled command handler')
     },
   }
 }
 
-async function consumeCommand (logger, pgPool, handleCommand, wrapper) {
+async function consumeCommand (context, logger, pgPool, handleCommand, wrapper) {
   const {command} = wrapper
   const {type} = command
 
   logger.debug(`Consuming ${type} command`)
 
-  logger.debug(`Acquiring Postgres client to handle ${type} command`)
-  const pgClient = await pgPool.connect()
+  const consumeContext = createContext({context})
 
   try {
+    const pgClient = await consumeContext.do(async () => {
+      logger.debug(`Acquiring Postgres client to handle ${type} command`)
+
+      const pgClient = await pgPool.connect()
+      await consumeContext.onceDone(() => pgClient.release())
+
+      return pgClient
+    })
+
     await inTransaction(pgClient, async () => {
       logger.debug(`Handling ${type} command`)
       const isHandled = await handleCommand(pgClient, command)
@@ -168,8 +130,7 @@ async function consumeCommand (logger, pgPool, handleCommand, wrapper) {
       await commandHandled(pgClient, wrapper)
     })
   } finally {
-    logger.debug(`Releasing Postgres client used to handle ${type} command`)
-    pgClient.release()
+    await consumeContext.cancel()
   }
 
   logger.debug(`Consumed ${type} command`)

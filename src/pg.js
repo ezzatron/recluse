@@ -1,8 +1,8 @@
 const {Pool, types} = require('pg')
 const Cursor = require('pg-cursor')
 
-const {CancelError, createCancelController, createTimeout, TimeoutError} = require('./async.js')
 const {systemClock} = require('./clock.js')
+const {Canceled, createContext, TimedOut} = require('./context.js')
 const {acquireAsyncIterator} = require('./iterator.js')
 
 const UNIQUE_VIOLATION = '23505'
@@ -24,9 +24,9 @@ async function acquireSessionLock (pgClient, namespace, id = 0) {
   await pgClient.query('SELECT pg_advisory_lock($1, $2)', [namespace, id])
 }
 
-function asyncQuery (text, values, marshal) {
+function asyncQuery (context, text, values, marshal) {
   const cursor = new Cursor(text, values)
-  const iterator = createCursorIterator(cursor, marshal)
+  const iterator = createCursorIterator(context, cursor, marshal)
 
   return {
     handleCommandComplete: cursor.handleCommandComplete.bind(cursor),
@@ -38,7 +38,6 @@ function asyncQuery (text, values, marshal) {
     submit: cursor.submit.bind(cursor),
 
     [Symbol.asyncIterator]: () => iterator,
-    cancel: iterator.cancel,
   }
 }
 
@@ -52,9 +51,10 @@ function configure () {
   types.setTypeParser(TYPE_TIMESTAMPTZ, noParse)
 }
 
-function continuousQuery (logger, pgClient, text, channel, nextOffset, options = {}) {
+function continuousQuery (context, logger, pgClient, text, channel, nextOffset, options = {}) {
   const {extraValues = [], marshal = identity, start = 0, timeout = 100, clock = systemClock} = options
   const iterator = createContinuousQueryIterator(
+    context,
     logger,
     pgClient,
     text,
@@ -69,7 +69,6 @@ function continuousQuery (logger, pgClient, text, channel, nextOffset, options =
 
   return {
     [Symbol.asyncIterator]: () => iterator,
-    cancel: iterator.cancel,
   }
 }
 
@@ -125,8 +124,7 @@ async function waitForNotification (client, channel) {
   })
 }
 
-function createCursorIterator (cursor, marshal = identity) {
-  const cancelController = createCancelController()
+function createCursorIterator (context, cursor, marshal = identity) {
   let done = false
   let final
 
@@ -135,33 +133,28 @@ function createCursorIterator (cursor, marshal = identity) {
       try {
         if (done) return {done, value: final}
 
-        const [rows, result] = await cancelController.race(cursorRead(cursor, 1))
+        const [rows, result] = await cursorRead(context, cursor, 1)
         done = rows.length < 1
 
         if (!done) return {done, value: marshal(rows[0])}
 
         final = result
-        await cancelController.race(cursorClose(cursor))
+        await cursorClose(context, cursor)
 
         return {done, value: final}
       } catch (error) {
-        if (error instanceof CancelError) {
+        if (error instanceof Canceled) {
           return {done: true}
-        } else {
-          throw error
         }
+
+        throw error
       }
-    },
-
-    async cancel () {
-      cancelController.cancel()
-
-      await cursorClose(cursor)
     },
   }
 }
 
 function createContinuousQueryIterator (
+  context,
   logger,
   pgClient,
   text,
@@ -173,7 +166,6 @@ function createContinuousQueryIterator (
   timeout,
   clock,
 ) {
-  const cancelController = createCancelController()
   let next = start
   let isListening = false
   let iterator = null
@@ -183,12 +175,15 @@ function createContinuousQueryIterator (
     async next () {
       try {
         while (true) {
-          if (cancelController.isCancelled) return {done: true}
-
           if (!isListening) {
-            logger.debug(`Listening for Postgres notifications on ${channel}`)
-            await cancelController.race(pgClient.query(`LISTEN ${channel}`))
             isListening = true
+
+            await context.do(async () => {
+              logger.debug(`Listening for Postgres notifications on ${channel}`)
+
+              await pgClient.query(`LISTEN ${channel}`)
+              await context.onceDone(() => pgClient.query(`UNLISTEN ${channel}`))
+            })
           }
 
           if (!iterator) {
@@ -201,11 +196,11 @@ function createContinuousQueryIterator (
             }
 
             logger.debug('Creating async query iterator')
-            iterator = acquireAsyncIterator(pgClient.query(asyncQuery(text, [next, ...extraValues], marshal)))
+            iterator = acquireAsyncIterator(pgClient.query(asyncQuery(context, text, [next, ...extraValues], marshal)))
           }
 
           logger.debug('Awaiting next async query result')
-          const result = await cancelController.race(iterator.next())
+          const result = await iterator.next()
 
           if (result.done) {
             logger.debug('Reached end of async query results')
@@ -217,76 +212,36 @@ function createContinuousQueryIterator (
           }
 
           iterator = null
-          const waitFor = [nextNotification]
-
-          if (typeof timeout === 'number') {
-            waitFor.push(createTimeout(clock, timeout))
-            logger.debug(`Awaiting Postgres notification on ${channel}, or for ${timeout}ms to elapse`)
-          } else {
-            logger.debug(`Awaiting Postgres notification on ${channel}`)
-          }
+          const notificationContext = createContext({clock, context, timeout})
 
           try {
-            await cancelController.race(...waitFor)
+            await notificationContext.do(() => nextNotification)
             logger.debug(`Received Postgres notification on ${channel}`)
           } catch (error) {
-            if (error instanceof TimeoutError) {
+            if (error instanceof TimedOut) {
               logger.debug(`${timeout}ms elapsed`)
-            } else {
-              throw error
             }
+
+            throw error
+          } finally {
+            await notificationContext.cancel()
           }
         }
       } catch (error) {
-        if (error instanceof CancelError) {
+        if (error instanceof Canceled) {
           logger.debug('Detected cancellation of continuous query')
 
           return {done: true}
-        } else {
-          throw error
         }
+
+        throw error
       }
-    },
-
-    async cancel () {
-      const errors = []
-
-      logger.debug('Cancelling command handler')
-      cancelController.cancel()
-
-      if (iterator) {
-        logger.debug('Cancelling async query iterator')
-
-        try {
-          await iterator.cancel()
-        } catch (error) {
-          errors.push(error)
-          logger.warn(`Failed to cancel async query iterator: ${error.stack}`)
-        }
-      } else {
-        logger.debug('No async query iterator to cancel')
-      }
-
-      if (isListening) {
-        logger.debug(`Un-listening to Postgres notifications on ${channel}`)
-
-        try {
-          await pgClient.query(`UNLISTEN ${channel}`)
-        } catch (error) {
-          errors.push(error)
-          logger.warn(`Failed to un-listen to Postgres notifications on ${channel}: ${error.stack}`)
-        }
-      } else {
-        logger.debug(`Never listened for Postgres notifications on ${channel}`)
-      }
-
-      if (errors.length > 0) throw errors[0]
     },
   }
 }
 
-function cursorRead (cursor, rowCount) {
-  return new Promise((resolve, reject) => {
+function cursorRead (context, cursor, rowCount) {
+  return context.promise((resolve, reject) => {
     cursor.read(rowCount, (error, rows, result) => {
       if (error) return reject(error)
 
@@ -295,8 +250,8 @@ function cursorRead (cursor, rowCount) {
   })
 }
 
-function cursorClose (cursor) {
-  return new Promise((resolve, reject) => {
+function cursorClose (context, cursor) {
+  return context.promise((resolve, reject) => {
     cursor.close(error => { error ? reject(error) : resolve() })
   })
 }

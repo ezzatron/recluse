@@ -1,76 +1,79 @@
 const {systemClock} = require('./clock.js')
 
-class Aborted extends Error {
-  constructor (reason) {
-    super('Aborted')
-
-    Object.defineProperty(this, 'reason', {value: reason, writable: false})
+class Canceled extends Error {
+  constructor () {
+    super('Canceled')
   }
 }
 
-const CANCELED = Symbol('CANCELED')
-const TIMED_OUT = Symbol('TIMED_OUT')
-
-module.exports = {
-  Aborted,
-  CANCELED,
-  createContext,
-  TIMED_OUT,
+class TimedOut extends Error {
+  constructor () {
+    super('Timed out')
+  }
 }
 
-function createContext (options = {}) {
-  const {clock = systemClock, timeout} = options
-  const routines = []
-  let cleanup, error, timeoutId
-  let isDone = false
+module.exports = {
+  Canceled,
+  createContext,
+  TimedOut,
+}
 
-  const done = new Promise((resolve, reject) => {
-    cleanup = async reason => {
-      if (isDone) return error
+async function createContext (options = {}) {
+  const {clock = systemClock, context, timeout} = options
+  const doneHandlers = []
+  let doneError, donePromise, doneReject, timeoutId
 
-      isDone = true
-      if (timeoutId) clock.clearTimeout(timeoutId)
+  async function markDone (error) {
+    if (doneError) return
 
+    doneError = error
+
+    if (timeoutId) clock.clearTimeout(timeoutId)
+    if (doneReject) doneReject(doneError)
+
+    for (const doneHandler of doneHandlers) await doneHandler(doneError)
+  }
+
+  if (typeof timeout === 'number') {
+    timeoutId = clock.setTimeout(async () => {
       try {
-        await Promise.all(routines.map(({cleanup, value}) => cleanup(value)))
-        error = new Aborted(reason)
-      } catch (cleanupError) {
-        error = cleanupError
-      }
+        await markDone(new TimedOut())
+      } catch (error) {}
+    }, timeout)
+  }
 
-      reject(error)
+  if (context) await context.onceDone(markDone)
 
-      return error
-    }
+  async function doAsync (fn) {
+    if (doneError) throw doneError
+    if (!donePromise) donePromise = new Promise((resolve, reject) => { doneReject = reject })
 
-    if (timeout) timeoutId = clock.setTimeout(() => cleanup(TIMED_OUT), timeout)
-  })
-  done.catch(() => {})
+    return Promise.race([donePromise, fn()])
+  }
 
   return {
     async cancel () {
-      const cleanupError = await cleanup(CANCELED)
-
-      if (cleanupError) throw cleanupError
+      await markDone(new Canceled())
     },
 
-    createChild () {
+    check () {
+      if (doneError) throw doneError
     },
 
-    async do (promise, cleanup) {
-      const routine = {cleanup}
-      routines.push(routine)
-      promise.then(value => { routine.value = value })
+    do: doAsync,
 
-      return Promise.race([done, promise])
+    async promise (fn) {
+      return doAsync(() => new Promise(fn))
     },
 
-    get isDone () {
-      return isDone
-    },
+    async onceDone (doneHandler) {
+      if (doneError) {
+        await doneHandler(doneError)
 
-    setParent (context) {
-      parent = context
+        throw doneError
+      }
+
+      doneHandlers.unshift(doneHandler)
     },
   }
 }
