@@ -1,9 +1,0 @@
-const LOCK_NAMESPACE = 1000000
-
-const COMMAND = LOCK_NAMESPACE + 100
-const PROJECTION = LOCK_NAMESPACE + 200
-
-module.exports = {
-  COMMAND,
-  PROJECTION,
-}
