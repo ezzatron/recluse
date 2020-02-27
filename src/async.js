@@ -16,6 +16,12 @@ module.exports = {
   TimedOut,
 }
 
+/**
+ * Creates a context for performing asynchronous work.
+ *
+ * Supports nesting of contexts, cancellation, and timeouts. Inspired by
+ * Golang's contexts.
+ */
 async function createContext (logger, options = {}) {
   const {context, timeout} = options
   const doneHandlers = []
@@ -32,20 +38,44 @@ async function createContext (logger, options = {}) {
   if (context) disconnectContext = await context.onceDone(markDone)
 
   return {
+    /**
+     * Cancels this context and any child contexts.
+     */
     async cancel () {
       await markDone(new Canceled())
     },
 
+    /**
+     * If this context is "done", throws an error representing the cause.
+     */
     async check () {
       if (doneError) throw doneError
     },
 
+    /**
+     * Executes the supplied async function, but if this context becomes "done"
+     * before completion, throws an error representing the cause.
+     */
     do: _do,
 
-    async doPromise (fn) {
-      return _do(() => new Promise(fn))
+    /**
+     * Same as context.do(), but accepts a Promise "executor" instead of an
+     * async function.
+     *
+     * The promise "executor" is the function typically passed to the Promise
+     * constructor that accepts the resolve and reject functions as arguments.
+     */
+    async doPromise (executor) {
+      return _do(() => new Promise(executor))
     },
 
+    /**
+     * Register an async function to be executed when this context transitions
+     * to "done".
+     *
+     * When canceling a context, all done handlers must complete before the
+     * call to context.cancel() will return.
+     */
     async onceDone (doneHandler) {
       if (doneError) {
         await doneHandler(doneError)

@@ -67,5 +67,7 @@ module.exports = {
     'no-alert': 'warn',
     'no-console': 'warn',
     'no-debugger': 'warn',
+
+    'jest/no-focused-tests': 'warn',
   }
 }
