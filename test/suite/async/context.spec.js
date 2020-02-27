@@ -1,5 +1,5 @@
-const {Canceled, createContext, TimedOut} = require('../../src/async.js')
-const {createLogger} = require('../helper/logging.js')
+const {Canceled, createContext, TimedOut} = require('../../../src/async.js')
+const {createLogger} = require('../../helper/logging.js')
 
 describe('Async context', () => {
   let logger
