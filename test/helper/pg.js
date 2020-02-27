@@ -40,13 +40,13 @@ function createTestHelper (userAfterEach) {
   afterEach(async function pgTestHelperAfterEach () {
     if (userAfterEach) await userAfterEach()
 
-    await Promise.allSettled(schemas.map(schema => client.query(`DROP SCHEMA ${schema} CASCADE`)))
-
     for (const client of clients) {
       try {
         client.release()
       } catch (error) {}
     }
+
+    await Promise.allSettled(schemas.map(schema => initClient.query(`DROP SCHEMA ${schema} CASCADE`)))
   })
 
   afterAll(async function pgTestHelperAfterAll () {

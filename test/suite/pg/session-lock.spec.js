@@ -4,16 +4,14 @@ const {createLogger} = require('../../helper/logging.js')
 const {createTestHelper} = require('../../helper/pg.js')
 
 describe('Postgres session locking', () => {
-  const pgHelper = createTestHelper()
   let context, logger
+  const pgHelper = createTestHelper(async () => {
+    await context.cancel()
+  })
 
   beforeEach(async () => {
     logger = createLogger()
     context = await createContext(logger)
-  })
-
-  afterEach(async () => {
-    await context.cancel()
   })
 
   it('should only allow one lock to be acquired at a time', async () => {

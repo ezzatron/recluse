@@ -4,8 +4,10 @@ const {createLogger} = require('../../helper/logging.js')
 const {createTestHelper} = require('../../helper/pg.js')
 
 describe('Postgres async queries', () => {
-  const pgHelper = createTestHelper()
   let context, logger
+  const pgHelper = createTestHelper(async () => {
+    await context.cancel()
+  })
 
   beforeEach(async () => {
     pgHelper.trackSchemas('recluse')
@@ -16,10 +18,6 @@ describe('Postgres async queries', () => {
 
     logger = createLogger()
     context = await createContext(logger)
-  })
-
-  afterEach(async () => {
-    await context.cancel()
   })
 
   it('should be able to query rows one at a time', async () => {
@@ -39,5 +37,11 @@ describe('Postgres async queries', () => {
     await context.cancel()
 
     await expect(readAsyncQueryRow(context)).rejects.toThrow(Canceled)
+  })
+
+  it('should handle query errors', async () => {
+    const readAsyncQueryRow = asyncQuery(logger, pgHelper.client, 'SELECT * FROM recluse.nonexistent')
+
+    await expect(readAsyncQueryRow(context)).rejects.toThrow('relation "recluse.nonexistent" does not exist')
   })
 })

@@ -37,7 +37,7 @@ function asyncQuery (logger, client, text, values, marshal = identity) {
 
     if (!cursor) {
       cursorContext = await createContext(logger, {context})
-      cursor = await client.query(
+      cursor = client.query(
         await cursorContext.do(async () => {
           const cursor = new Cursor(text, values)
 
@@ -54,16 +54,24 @@ function asyncQuery (logger, client, text, values, marshal = identity) {
       )
     }
 
-    const result = await context.doPromise((resolve, reject) => {
-      cursor.read(1, (error, rows) => {
-        if (error) return reject(error)
+    let result
 
-        const isEmpty = rows.length < 1
-        const row = isEmpty ? undefined : marshal(rows[0])
+    try {
+      result = await context.doPromise((resolve, reject) => {
+        cursor.read(1, (error, rows) => {
+          if (error) return reject(error)
 
-        resolve([isEmpty, row])
+          const isEmpty = rows.length < 1
+          const row = isEmpty ? undefined : marshal(rows[0])
+
+          resolve([isEmpty, row])
+        })
       })
-    })
+    } catch (error) {
+      await cursorContext.cancel()
+
+      throw error
+    }
 
     if (result[0]) {
       isDone = true
