@@ -14,6 +14,7 @@ module.exports = {
   Canceled,
   createContext,
   TimedOut,
+  withDefer,
 }
 
 /**
@@ -111,4 +112,35 @@ async function createContext (logger, options = {}) {
 
     for (const [doneHandler] of doneHandlers) await doneHandler(doneError)
   }
+}
+
+async function withDefer (fn) {
+  const deferreds = []
+  const defer = deferred => { deferreds.unshift(deferred) }
+  let result, firstError
+
+  try {
+    result = await fn(defer)
+  } catch (error) {
+    firstError = error
+  }
+
+  for (const deferred of deferreds) {
+    const recover = async recoverFn => {
+      const error = firstError
+      firstError = null
+
+      await recoverFn(error)
+    }
+
+    try {
+      await deferred(recover)
+    } catch (error) {
+      firstError = firstError || error
+    }
+  }
+
+  if (firstError) throw firstError
+
+  return result
 }
