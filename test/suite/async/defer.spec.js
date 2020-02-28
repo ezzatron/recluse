@@ -75,26 +75,7 @@ describe('withDefer()', () => {
     expect(log).toEqual(['a', 'c', 'b'])
   })
 
-  it('should reject with the first error encountered when running deferred functions', async () => {
-    const log = []
-
-    const task = withDefer(defer => {
-      defer(() => {
-        log.push('a')
-        throw new Error('error-a')
-      })
-
-      defer(() => {
-        log.push('b')
-        throw new Error('error-b')
-      })
-    })
-
-    await expect(task).rejects.toThrow('error-b')
-    expect(log).toEqual(['b', 'a'])
-  })
-
-  it('should reject with the main function error when running deferred functions that throw', async () => {
+  it('should reject with the last error encountered when running deferred functions', async () => {
     const log = []
 
     const task = withDefer(defer => {
@@ -111,7 +92,7 @@ describe('withDefer()', () => {
       throw new Error('error-c')
     })
 
-    await expect(task).rejects.toThrow('error-c')
+    await expect(task).rejects.toThrow('error-a')
     expect(log).toEqual(['b', 'a'])
   })
 
@@ -147,7 +128,7 @@ describe('withDefer()', () => {
     const task = withDefer(defer => {
       defer(async recover => {
         await recover(async error => {
-          log.push(error.message)
+          log.push(`defer-a ${error.message}`)
 
           throw error
         })
@@ -155,7 +136,7 @@ describe('withDefer()', () => {
 
       defer(async recover => {
         await recover(async error => {
-          log.push(error.message)
+          log.push(`defer-b ${error.message}`)
 
           throw error
         })
@@ -165,6 +146,6 @@ describe('withDefer()', () => {
     })
 
     await expect(task).rejects.toThrow('error-a')
-    expect(log).toEqual(['error-a', 'error-a'])
+    expect(log).toEqual(['defer-b error-a', 'defer-a error-a'])
   })
 })

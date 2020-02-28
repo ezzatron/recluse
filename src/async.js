@@ -117,18 +117,18 @@ async function createContext (logger, options = {}) {
 async function withDefer (fn) {
   const deferreds = []
   const defer = deferred => { deferreds.unshift(deferred) }
-  let result, firstError
+  let result, lastError
 
   try {
     result = await fn(defer)
   } catch (error) {
-    firstError = error
+    lastError = error
   }
 
   for (const deferred of deferreds) {
     const recover = async recoverFn => {
-      const error = firstError
-      firstError = null
+      const error = lastError
+      lastError = null
 
       await recoverFn(error)
     }
@@ -136,11 +136,11 @@ async function withDefer (fn) {
     try {
       await deferred(recover)
     } catch (error) {
-      firstError = firstError || error
+      lastError = error
     }
   }
 
-  if (firstError) throw firstError
+  if (lastError) throw lastError
 
   return result
 }
