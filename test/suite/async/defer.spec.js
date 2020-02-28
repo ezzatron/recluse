@@ -100,18 +100,18 @@ describe('withDefer()', () => {
     const log = []
 
     await withDefer(defer => {
-      defer(async recover => {
-        await recover(async error => { log.push(error.message) })
+      defer(recover => {
+        log.push(recover().message)
       })
 
-      defer(async recover => {
-        await recover(async error => { log.push(error.message) })
+      defer(recover => {
+        log.push(recover().message)
 
         throw new Error('error-a')
       })
 
-      defer(async recover => {
-        await recover(async error => { log.push(error.message) })
+      defer(recover => {
+        log.push(recover().message)
 
         throw new Error('error-b')
       })
@@ -126,20 +126,18 @@ describe('withDefer()', () => {
     const log = []
 
     const task = withDefer(defer => {
-      defer(async recover => {
-        await recover(async error => {
-          log.push(`defer-a ${error.message}`)
+      defer(recover => {
+        const error = recover()
+        log.push(`defer-a ${error.message}`)
 
-          throw error
-        })
+        throw error
       })
 
-      defer(async recover => {
-        await recover(async error => {
-          log.push(`defer-b ${error.message}`)
+      defer(recover => {
+        const error = recover()
+        log.push(`defer-b ${error.message}`)
 
-          throw error
-        })
+        throw error
       })
 
       throw new Error('error-a')
