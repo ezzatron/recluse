@@ -126,15 +126,13 @@ async function withDefer (fn) {
   }
 
   for (const deferred of deferreds) {
-    const recover = () => {
-      const error = lastError
-      lastError = undefined
-
-      return error
-    }
-
     try {
-      await deferred(recover)
+      await deferred(() => {
+        const error = lastError
+        lastError = undefined
+
+        return error
+      })
     } catch (error) {
       lastError = error
     }
