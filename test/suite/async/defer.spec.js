@@ -146,4 +146,38 @@ describe('withDefer()', () => {
     await expect(task).rejects.toThrow('error-a')
     expect(log).toEqual(['defer-b error-a', 'defer-a error-a'])
   })
+
+  it('should return nothing from recover() when no error has occurred', async () => {
+    const log = []
+
+    await withDefer(defer => {
+      defer(recover => {
+        log.push(`defer-a ${typeof recover()}`)
+      })
+
+      defer(recover => {
+        log.push(`defer-b ${typeof recover()}`)
+      })
+    })
+
+    expect(log).toEqual(['defer-b undefined', 'defer-a undefined'])
+  })
+
+  it('should return nothing from recover() once previous errors are recovered', async () => {
+    const log = []
+
+    await withDefer(defer => {
+      defer(recover => {
+        log.push(`defer-a ${typeof recover()}`)
+      })
+
+      defer(recover => {
+        log.push(`defer-b ${typeof recover()}`)
+      })
+
+      throw new Error('error-a')
+    })
+
+    expect(log).toEqual(['defer-b object', 'defer-a undefined'])
+  })
 })
