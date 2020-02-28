@@ -1,94 +1,56 @@
 const {Client, Pool} = require('pg')
 
-const {inTransaction} = require('../../src/pg.js')
-
 module.exports = {
   createTestHelper,
 
   TIME_PATTERN: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d+\+00$/,
 }
 
-function createTestHelper (userAfterEach) {
+function createTestHelper (options = {}) {
+  const {
+    afterEach: userAfterEach,
+    beforeEach: userBeforeEach,
+  } = options
+
   const {PGHOST, PGPORT, PGUSER, PGPASSWORD} = process.env
   const config = {
     host: PGHOST || 'localhost',
     port: parseInt(PGPORT || '5432'),
     user: PGUSER || 'postgres',
     password: PGPASSWORD || '',
-    database: `recluse_test_${Math.random().toString(36).substring(2, 15)}`,
+    database: `test_${Math.random().toString(36).substring(2, 15)}`,
   }
 
-  const clients = []
-  const schemas = []
-  let client, initClient, pool, query
+  let pool, schemas
 
-  beforeAll(async function pgTestHelperBeforeAll () {
-    initClient = new Client({...config, database: 'postgres'})
+  const helper = {
+    async inTransaction (fn) {
+      const client = new Client(config)
+      await client.connect()
 
-    await initClient.connect()
-    await initClient.query(`DROP DATABASE IF EXISTS ${config.database}`)
-    await initClient.query(`CREATE DATABASE ${config.database}`)
-
-    pool = new Pool(config)
-  })
-
-  beforeEach(async function pgTestHelperBeforeEach () {
-    client = await createClient()
-    query = client.query.bind(client)
-  })
-
-  afterEach(async function pgTestHelperAfterEach () {
-    if (userAfterEach) await userAfterEach()
-
-    for (const client of clients) {
       try {
-        client.release()
-      } catch (error) {}
-    }
+        let result
 
-    await Promise.allSettled(schemas.map(schema => initClient.query(`DROP SCHEMA ${schema} CASCADE`)))
-  })
+        await client.query('BEGIN')
 
-  afterAll(async function pgTestHelperAfterAll () {
-    try {
-      await pool.end()
-    } catch (error) {}
+        try {
+          result = await fn(client)
+        } catch (error) {
+          await client.query('ROLLBACK')
 
-    await initClient.query(`DROP DATABASE ${config.database}`)
+          throw error
+        }
 
-    try {
-      await initClient.end()
-    } catch (error) {}
-  })
+        await client.query('COMMIT')
 
-  async function createClient () {
-    const client = await pool.connect()
-    clients.push(client)
-
-    return client
-  }
-
-  return {
-    get client () {
-      return client
-    },
-
-    get config () {
-      return config
-    },
-
-    createClient,
-
-    async inTransaction (fn, suppliedClient = client) {
-      return inTransaction(suppliedClient, fn)
+        return result
+      } finally {
+        await client.end()
+      }
     },
 
     get pool () {
       return pool
-    },
-
-    get query () {
-      return query
     },
 
     trackSchemas (...toAdd) {
@@ -102,4 +64,66 @@ function createTestHelper (userAfterEach) {
       return schema
     },
   }
+
+  beforeAll(async function pgTestHelperBeforeAll () {
+    const client = new Client({...config, database: 'postgres'})
+    await client.connect()
+    await client.query(`CREATE DATABASE ${config.database}`)
+    await client.end()
+  })
+
+  beforeEach(async function pgTestHelperBeforeEach () {
+    schemas = []
+    pool = new Pool(config)
+
+    if (userBeforeEach) await userBeforeEach(helper)
+  })
+
+  afterEach(async function pgTestHelperAfterEach () {
+    if (userAfterEach) await userAfterEach(helper)
+
+    await pool.end()
+
+    if (schemas.length > 0) {
+      const dropClient = new Client(config)
+      await dropClient.connect()
+
+      try {
+        await inTransaction(dropClient, async () => {
+          for (const schema of schemas) {
+            await dropClient.query(`DROP SCHEMA ${schema} CASCADE`)
+          }
+        })
+      } finally {
+        await dropClient.end()
+      }
+    }
+  })
+
+  afterAll(async function pgTestHelperAfterAll () {
+    const client = new Client({...config, database: 'postgres'})
+    await client.connect()
+    await client.query(`DROP DATABASE ${config.database}`)
+    await client.end()
+  })
+
+  return helper
+}
+
+async function inTransaction (client, fn) {
+  let result
+
+  await client.query('BEGIN')
+
+  try {
+    result = await fn()
+  } catch (error) {
+    await client.query('ROLLBACK')
+
+    throw error
+  }
+
+  await client.query('COMMIT')
+
+  return result
 }

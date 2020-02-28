@@ -1,7 +1,5 @@
 const Cursor = require('pg-cursor')
 
-const {createContext} = require('./async.js')
-
 module.exports = {
   acquireSessionLock,
   asyncQuery,
@@ -10,16 +8,29 @@ module.exports = {
 /**
  * Acquires an advisory lock for a particular namespace / ID combination.
  *
- * The lock is released when the supplied context is done.
+ * Returns an async function that should be called to release the lock.
  */
-async function acquireSessionLock (context, logger, client, namespace, id = 0) {
-  await context.do(async () => {
-    logger.debug(`Acquiring session lock for ${namespace}.${id}`)
-    await client.query('SELECT pg_advisory_lock($1, $2)', [namespace, id])
-    logger.debug(`Acquired session lock for ${namespace}.${id}`)
+async function acquireSessionLock (context, logger, pool, namespace, id = 0) {
+  const client = await pool.connect()
 
-    await context.onceDone(() => client.query('SELECT pg_advisory_unlock($1, $2)', [namespace, id]))
-  })
+  try {
+    await context.do(async () => client.query('SELECT pg_advisory_lock($1, $2)', [namespace, id]))
+
+    return async function releaseSessionLock (context) {
+      try {
+        await context.do(async () => client.query('SELECT pg_advisory_unlock($1, $2)', [namespace, id]))
+        client.release()
+      } catch (error) {
+        client.release(true)
+
+        throw error
+      }
+    }
+  } catch (error) {
+    client.release(true)
+
+    throw error
+  }
 }
 
 /**
@@ -28,30 +39,23 @@ async function acquireSessionLock (context, logger, client, namespace, id = 0) {
  *
  * The query is not executed until the first read.
  */
-function asyncQuery (logger, client, text, values, marshal = identity) {
-  let cursor, cursorContext
+function asyncQuery (logger, pool, text, values, marshal = identity) {
+  const cursor = new Cursor(text, values)
   let isDone = false
+  let client
 
-  return async function readAsyncQueryRow (context) {
+  return async function readRow (context) {
     if (isDone) return [true, undefined]
 
-    if (!cursor) {
-      cursorContext = await createContext(logger, {context})
-      cursor = client.query(
-        await cursorContext.do(async () => {
-          const cursor = new Cursor(text, values)
+    if (!client) {
+      try {
+        client = await pool.connect()
+        await context.do(async () => client.query(cursor))
+      } catch (error) {
+        client.release(true)
 
-          await cursorContext.onceDone(() => new Promise((resolve, reject) => {
-            cursor.close(error => {
-              if (error) return reject(error)
-
-              resolve()
-            })
-          }))
-
-          return cursor
-        }),
-      )
+        throw error
+      }
     }
 
     let result
@@ -60,22 +64,45 @@ function asyncQuery (logger, client, text, values, marshal = identity) {
       result = await context.doPromise((resolve, reject) => {
         cursor.read(1, (error, rows) => {
           if (error) return reject(error)
+          if (rows.length < 1) return resolve([true, undefined])
 
-          const isEmpty = rows.length < 1
-          const row = isEmpty ? undefined : marshal(rows[0])
-
-          resolve([isEmpty, row])
+          resolve([false, marshal(rows[0])])
         })
       })
     } catch (error) {
-      await cursorContext.cancel()
+      isDone = true
+
+      await new Promise(resolve => {
+        cursor.close(error => {
+          if (error) logger.warn(`Unable to close cursor: ${error.stack}`)
+
+          resolve()
+        })
+      })
+
+      client.release(true)
 
       throw error
     }
 
     if (result[0]) {
       isDone = true
-      await cursorContext.cancel()
+
+      try {
+        await new Promise((resolve, reject) => {
+          cursor.close(error => {
+            if (error) return reject(error)
+
+            resolve()
+          })
+        })
+
+        client.release()
+      } catch (error) {
+        client.release(true)
+
+        throw error
+      }
     }
 
     return result
