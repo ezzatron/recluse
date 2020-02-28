@@ -61,24 +61,15 @@ function asyncQuery (logger, pool, text, values, marshal = identity) {
     let result
 
     try {
-      result = await context.doPromise((resolve, reject) => {
-        cursor.read(1, (error, rows) => {
-          if (error) return reject(error)
-          if (rows.length < 1) return resolve([true, undefined])
-
-          resolve([false, marshal(rows[0])])
-        })
-      })
+      result = await context.do(async () => readFromCursor(cursor, marshal))
     } catch (error) {
       isDone = true
 
-      await new Promise(resolve => {
-        cursor.close(error => {
-          if (error) logger.warn(`Unable to close cursor: ${error.stack}`)
-
-          resolve()
-        })
-      })
+      try {
+        await closeCursor(cursor)
+      } catch (error) {
+        logger.warn(`Unable to close cursor: ${error.stack}`)
+      }
 
       client.release(true)
 
@@ -89,14 +80,7 @@ function asyncQuery (logger, pool, text, values, marshal = identity) {
       isDone = true
 
       try {
-        await new Promise((resolve, reject) => {
-          cursor.close(error => {
-            if (error) return reject(error)
-
-            resolve()
-          })
-        })
-
+        await closeCursor(cursor)
         client.release()
       } catch (error) {
         client.release(true)
@@ -107,6 +91,27 @@ function asyncQuery (logger, pool, text, values, marshal = identity) {
 
     return result
   }
+}
+
+function closeCursor (cursor) {
+  return new Promise((resolve, reject) => {
+    cursor.close(error => {
+      if (error) return reject(error)
+
+      resolve()
+    })
+  })
+}
+
+function readFromCursor (cursor, marshal) {
+  return new Promise((resolve, reject) => {
+    cursor.read(1, (error, rows) => {
+      if (error) return reject(error)
+      if (rows.length < 1) return resolve([true, undefined])
+
+      resolve([false, marshal(rows[0])])
+    })
+  })
 }
 
 function identity (value) {
