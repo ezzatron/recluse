@@ -116,14 +116,22 @@ async function createContext (logger, options = {}) {
 
 async function withDefer (fn) {
   const deferreds = []
-  const defer = deferred => { deferreds.unshift(deferred) }
+  let isDone = false
   let result, lastError
+
+  const defer = deferred => {
+    if (isDone) throw new Error('Defer called after main function completed')
+
+    deferreds.unshift(deferred)
+  }
 
   try {
     result = await fn(defer)
   } catch (error) {
     lastError = error
   }
+
+  isDone = true
 
   for (const deferred of deferreds) {
     try {

@@ -180,4 +180,19 @@ describe('withDefer()', () => {
 
     expect(log).toEqual(['defer-b object', 'defer-a undefined'])
   })
+
+  it('should throw if defer is called after the function ends', async () => {
+    let storedDefer
+    await withDefer(async defer => { storedDefer = defer })
+
+    expect(() => storedDefer(() => {})).toThrow('Defer called after main function completed')
+  })
+
+  it('should throw if defer is called inside a deferred function', async () => {
+    const task = withDefer(defer => {
+      defer(() => { defer(() => {}) })
+    })
+
+    await expect(task).rejects.toThrow('Defer called after main function completed')
+  })
 })
