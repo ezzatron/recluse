@@ -3,7 +3,7 @@ const {acquireSessionLock} = require('../../../src/pg.js')
 const {createLogger} = require('../../helper/logging.js')
 const {createTestHelper} = require('../../helper/pg.js')
 
-describe('Postgres session locking', () => {
+describe.skip('Postgres session locking', () => {
   let context, logger
 
   const pgHelper = createTestHelper({

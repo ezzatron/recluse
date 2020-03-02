@@ -3,7 +3,7 @@ const {asyncQuery} = require('../../../src/pg.js')
 const {createLogger} = require('../../helper/logging.js')
 const {createTestHelper} = require('../../helper/pg.js')
 
-describe('Postgres async queries', () => {
+describe.skip('Postgres async queries', () => {
   let context, logger
 
   const pgHelper = createTestHelper({

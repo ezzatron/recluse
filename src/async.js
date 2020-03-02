@@ -1,20 +1,32 @@
-class Canceled extends Error {
+class Done extends Error {}
+
+class Canceled extends Done {
   constructor () {
     super('Canceled')
   }
 }
 
-class TimedOut extends Error {
+class TimedOut extends Done {
   constructor () {
     super('Timed out')
   }
 }
 
 module.exports = {
-  Canceled,
+  assertRunning,
   createContext,
-  TimedOut,
+  doTerminable,
+  doInterminable,
+  isCanceled,
+  isDone,
+  isTimedOut,
   withDefer,
+}
+
+function assertRunning (context) {
+  const {doneError} = context
+
+  if (doneError) throw doneError
 }
 
 /**
@@ -23,95 +35,149 @@ module.exports = {
  * Supports nesting of contexts, cancellation, and timeouts. Inspired by
  * Golang's contexts.
  */
-async function createContext (logger, options = {}) {
+function createContext (logger, options = {}) {
   const {context, timeout} = options
-  const doneHandlers = []
-  let disconnectContext, doneError, donePromise, doneReject, timeoutId
+  let doneHandlers = []
+  let disconnectContext, done, doneError, doneReject, timeoutId
 
   if (typeof timeout === 'number') {
-    timeoutId = setTimeout(async () => {
-      try {
-        await markDone(new TimedOut())
-      } catch (error) {}
-    }, timeout)
+    timeoutId = setTimeout(() => { markDone(new TimedOut()) }, timeout)
   }
 
-  if (context) disconnectContext = await context.onceDone(markDone)
+  if (context) disconnectContext = context.onceDone(markDone)
 
-  return {
-    /**
-     * Cancels this context and any child contexts.
-     */
-    async cancel () {
-      await markDone(new Canceled())
+  return [
+    {
+      get done () {
+        if (!done) done = new Promise((resolve, reject) => { doneReject = reject })
+
+        return done
+      },
+
+      get doneError () {
+        return doneError
+      },
+
+      onceDone,
     },
+    cancel,
+  ]
 
-    /**
-     * If this context is "done", throws an error representing the cause.
-     */
-    async check () {
-      if (doneError) throw doneError
-    },
-
-    /**
-     * Executes the supplied async function, but if this context becomes "done"
-     * before completion, throws an error representing the cause.
-     */
-    do: _do,
-
-    /**
-     * Same as context.do(), but accepts a Promise "executor" instead of an
-     * async function.
-     *
-     * The promise "executor" is the function typically passed to the Promise
-     * constructor that accepts the resolve and reject functions as arguments.
-     */
-    async doPromise (executor) {
-      return _do(() => new Promise(executor))
-    },
-
-    /**
-     * Register an async function to be executed when this context transitions
-     * to "done".
-     *
-     * When canceling a context, all done handlers must complete before the
-     * call to context.cancel() will return.
-     */
-    async onceDone (doneHandler) {
-      if (doneError) {
-        await doneHandler(doneError)
-
-        throw doneError
-      }
-
-      const wrapper = [doneHandler]
-      doneHandlers.unshift(wrapper)
-
-      return () => {
-        const index = doneHandlers.indexOf(wrapper)
-        if (index >= 0) doneHandlers.splice(index, 1)
-      }
-    },
+  /**
+   * Cancels this context and any child contexts.
+   */
+  function cancel () {
+    markDone(new Canceled())
   }
 
-  async function _do (fn) {
-    if (doneError) throw doneError
-    if (!donePromise) donePromise = new Promise((resolve, reject) => { doneReject = reject })
+  /**
+   * Register a function to be executed when this context transitions to "done".
+   */
+  function onceDone (doneHandler) {
+    const wrapper = [doneHandler]
+    doneHandlers.push(wrapper)
 
-    return Promise.race([donePromise, fn()])
+    return function removeDoneHandler () {
+      const index = doneHandlers.indexOf(wrapper)
+      if (index >= 0) doneHandlers.splice(index, 1)
+    }
   }
 
-  async function markDone (error) {
+  /**
+   * Used internally by both cancellation and timeouts to transition this
+   * context to "done".
+   */
+  function markDone (error) {
     if (doneError) return
 
     doneError = error
 
     if (timeoutId) clearTimeout(timeoutId)
     if (disconnectContext) disconnectContext()
-    if (doneReject) doneReject(doneError)
 
-    for (const [doneHandler] of doneHandlers) await doneHandler(doneError)
+    for (const [doneHandler] of doneHandlers) doneHandler(doneError)
+    doneHandlers = []
+
+    if (doneReject) doneReject(doneError)
   }
+}
+
+/**
+ * Runs an async function with no termination mechanism under a context.
+ *
+ * If the function resolves before the context becomes done, the resolved value
+ * is returned, and the cleanup handler is never executed.
+ *
+ * If the function rejects before the context becomes done, the rejection is
+ * re-thrown, and the cleanup handler is never executed.
+ *
+ * If the context becomes done before the function resolves or rejects, the done
+ * error is immediately thrown. The cleanup handler is then called, but is not
+ * awaited. For this reason, cleanup handlers should never throw, and doing so
+ * will result in undefined behavior.
+ *
+ * If the cleanup handler is called, it will be called with two arguments:
+ * - A promise that, when awaited, will resolve or reject in the same way as the
+ *   original call to the supplied function. This should typically happen inside
+ *   a try/catch statement in order to prevent the cleanup handler from
+ *   throwing.
+ * - An error representing the reason why the context has become done.
+ */
+async function doInterminable (context, fn, cleanup) {
+  assertRunning(context)
+  let promise
+  const removeCleanup = cleanup && context.onceDone(doneError => cleanup(promise, doneError))
+
+  async function executeAndRemoveCleanup () {
+    promise = (async () => fn())()
+
+    try {
+      return await promise
+    } finally {
+      if (removeCleanup) removeCleanup()
+    }
+  }
+
+  return Promise.race([context.done, executeAndRemoveCleanup()])
+}
+
+/**
+ * Runs an async function with termination mechanics under a context.
+ *
+ * If the function resolves before the context becomes done, the resolved value
+ * is returned, and the abort handler is never executed.
+ *
+ * If the function rejects before the context becomes done, the rejection is
+ * re-thrown, and the abort handler is never executed.
+ *
+ * If the context becomes done before the function resolves or rejects, the
+ * abort handler is immediately called. Calling the abort handler should result
+ * in the original function call completing in a timely fashion.
+ *
+ * If the abort handler is called, it will be called with one argument:
+ * - An error representing the reason why the context has become done.
+ */
+async function doTerminable (context, fn, abort) {
+  assertRunning(context)
+  const removeAbort = context.onceDone(abort)
+
+  try {
+    return await fn()
+  } finally {
+    removeAbort()
+  }
+}
+
+function isCanceled (error) {
+  return error instanceof Canceled
+}
+
+function isDone (error) {
+  return error instanceof Done
+}
+
+function isTimedOut (error) {
+  return error instanceof TimedOut
 }
 
 async function withDefer (fn) {
