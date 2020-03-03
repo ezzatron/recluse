@@ -58,30 +58,27 @@ function createContext (logger, options = {}) {
         return doneError
       },
 
-      onceDone,
+      /**
+       * Register a function to be executed when this context transitions to "done".
+       */
+      onceDone (doneHandler) {
+        const wrapper = [doneHandler]
+        doneHandlers.push(wrapper)
+
+        return function removeDoneHandler () {
+          const index = doneHandlers.indexOf(wrapper)
+          if (index >= 0) doneHandlers.splice(index, 1)
+        }
+      },
     },
-    cancel,
+
+    /**
+     * Cancels this context and any child contexts.
+     */
+    function cancel () {
+      markDone(new Canceled())
+    },
   ]
-
-  /**
-   * Cancels this context and any child contexts.
-   */
-  function cancel () {
-    markDone(new Canceled())
-  }
-
-  /**
-   * Register a function to be executed when this context transitions to "done".
-   */
-  function onceDone (doneHandler) {
-    const wrapper = [doneHandler]
-    doneHandlers.push(wrapper)
-
-    return function removeDoneHandler () {
-      const index = doneHandlers.indexOf(wrapper)
-      if (index >= 0) doneHandlers.splice(index, 1)
-    }
-  }
 
   /**
    * Used internally by both cancellation and timeouts to transition this

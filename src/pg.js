@@ -1,119 +1,76 @@
-const Cursor = require('pg-cursor')
+const {doInterminable, withDefer} = require('./async.js')
 
 module.exports = {
-  acquireSessionLock,
-  asyncQuery,
+  withAdvisoryLock,
 }
 
 /**
- * Acquires an advisory lock for a particular namespace / ID combination.
- *
- * Returns an async function that should be called to release the lock.
+ * Uses an advisory lock for a particular namespace / ID combination to perform
+ * a unit of work.
  */
-async function acquireSessionLock (context, logger, pool, namespace, id = 0) {
-  const client = await pool.connect()
+async function withAdvisoryLock (context, logger, pool, namespace, id, fn) {
+  return withClient(context, logger, pool, async client => withDefer(async defer => {
+    defer(await acquireAdvisoryLock(context, logger, client, namespace, id))
 
-  try {
-    await context.do(async () => client.query('SELECT pg_advisory_lock($1, $2)', [namespace, id]))
-
-    return async function releaseSessionLock (context) {
-      try {
-        await context.do(async () => client.query('SELECT pg_advisory_unlock($1, $2)', [namespace, id]))
-        client.release()
-      } catch (error) {
-        client.release(true)
-
-        throw error
-      }
-    }
-  } catch (error) {
-    client.release(true)
-
-    throw error
-  }
+    return fn()
+  }))
 }
 
-/**
- * Returns an async function that will return query results one at a time until
- * exhausted.
- *
- * The query is not executed until the first read.
- */
-function asyncQuery (logger, pool, text, values, marshal = identity) {
-  const cursor = new Cursor(text, values)
-  let isDone = false
-  let client
+async function withClient (context, logger, pool, fn) {
+  return withDefer(async defer => {
+    const client = await acquireClient(context, logger, pool)
+    defer(recover => client.release(recover()))
 
-  return async function readRow (context) {
-    if (isDone) return [true, undefined]
-
-    if (!client) {
-      try {
-        client = await pool.connect()
-        await context.do(async () => client.query(cursor))
-      } catch (error) {
-        client.release(true)
-
-        throw error
-      }
-    }
-
-    let result
-
-    try {
-      result = await context.do(async () => readFromCursor(cursor, marshal))
-    } catch (error) {
-      isDone = true
-
-      try {
-        await closeCursor(cursor)
-      } catch (error) {
-        logger.warn(`Unable to close cursor: ${error.stack}`)
-      }
-
-      client.release(true)
-
-      throw error
-    }
-
-    if (result[0]) {
-      isDone = true
-
-      try {
-        await closeCursor(cursor)
-        client.release()
-      } catch (error) {
-        client.release(true)
-
-        throw error
-      }
-    }
-
-    return result
-  }
-}
-
-function closeCursor (cursor) {
-  return new Promise((resolve, reject) => {
-    cursor.close(error => {
-      if (error) return reject(error)
-
-      resolve()
-    })
+    return fn(client)
   })
 }
 
-function readFromCursor (cursor, marshal) {
-  return new Promise((resolve, reject) => {
-    cursor.read(1, (error, rows) => {
-      if (error) return reject(error)
-      if (rows.length < 1) return resolve([true, undefined])
+async function acquireAdvisoryLock (context, logger, client, namespace, id) {
+  async function releaseAdvisoryLock () {
+    await client.query('SELECT pg_advisory_unlock($1, $2)', [namespace, id])
+  }
 
-      resolve([false, marshal(rows[0])])
-    })
-  })
+  return doInterminable(
+    context,
+    async () => {
+      await client.query('SELECT pg_advisory_lock($1, $2)', [namespace, id])
+
+      return releaseAdvisoryLock
+    },
+    async promise => {
+      try {
+        await promise
+      } catch (error) {
+        return // lock was never acquired
+      }
+
+      try {
+        await releaseAdvisoryLock()
+      } catch (error) {
+        logger.warn(`Unable to cleanly release Postgres advisory lock: ${error.stack}`)
+      }
+    },
+  )
 }
 
-function identity (value) {
-  return value
+async function acquireClient (context, logger, pool) {
+  return doInterminable(
+    context,
+    async () => pool.connect(),
+    async promise => {
+      let client
+
+      try {
+        client = await promise
+      } catch (error) {
+        return // client was never acquired
+      }
+
+      try {
+        client.release()
+      } catch (error) {
+        logger.warn(`Unable to cleanly release Postgres client: ${error.stack}`)
+      }
+    },
+  )
 }
