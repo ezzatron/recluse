@@ -18,8 +18,13 @@ async function withAdvisoryLock (context, logger, pool, namespace, id, fn) {
 
 async function withClient (context, logger, pool, fn) {
   return withDefer(async defer => {
+    console.log('Acquiring client')
     const client = await acquireClient(context, logger, pool)
-    defer(recover => client.release(recover()))
+    console.log('Acquired client')
+    defer(recover => {
+      console.log('Releasing client')
+      client.release(recover())
+    })
 
     return fn(client)
   })
@@ -27,13 +32,17 @@ async function withClient (context, logger, pool, fn) {
 
 async function acquireAdvisoryLock (context, logger, client, namespace, id) {
   async function releaseAdvisoryLock () {
+    console.log('Releasing lock')
     await client.query('SELECT pg_advisory_unlock($1, $2)', [namespace, id])
+    console.log('Released lock')
   }
 
   return doInterminable(
     context,
     async () => {
+      console.log('Acquiring lock')
       await client.query('SELECT pg_advisory_lock($1, $2)', [namespace, id])
+      console.log('Acquired lock')
 
       return releaseAdvisoryLock
     },
