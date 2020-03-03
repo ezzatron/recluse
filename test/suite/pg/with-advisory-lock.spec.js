@@ -4,15 +4,11 @@ const {createLogger} = require('../../helper/logging.js')
 const {createTestHelper} = require('../../helper/pg.js')
 
 describe('withAdvisoryLock()', () => {
-  let cancel, context, log, logger, runAllJestTimers, runPromises, sleep
+  let cancel, context, log, logger, runPromises
 
   const pgHelper = createTestHelper({
     async beforeEach () {
-      jest.useFakeTimers()
-
-      sleep = delay => new Promise(resolve => { setTimeout(resolve, delay) })
       runPromises = () => new Promise(resolve => { setImmediate(resolve) })
-      runAllJestTimers = async () => { jest.runAllTimers() }
 
       log = []
       logger = createLogger()
@@ -28,20 +24,37 @@ describe('withAdvisoryLock()', () => {
   })
 
   it('should only allow one lock to be acquired at a time', async () => {
-    const namespace = 111
-    const id = 222
+    function writeToLog () {
+      return withAdvisoryLock(context, logger, pgHelper.pool, 111, 222, async () => {
+        log.push('a')
+        await runPromises()
+        log.push('b')
+      })
+    }
 
-    const taskA = sleep(111).then(() => withAdvisoryLock(context, logger, pgHelper.pool, namespace, id, async () => {
-      await sleep(222)
-      log.push('a')
-    }))
-    const taskB = sleep(222).then(() => withAdvisoryLock(context, logger, pgHelper.pool, namespace, id, async () => {
-      log.push('b')
-    }))
+    await Promise.all([writeToLog(), writeToLog(), writeToLog(), writeToLog()])
 
-    jest.runAllTimers()
-    await Promise.all([taskA, taskB])
+    expect(log).toEqual(['a', 'b', 'a', 'b', 'a', 'b', 'a', 'b'])
+  })
 
-    expect(log).toEqual(['a', 'b'])
+  it('should handle termination during client acquisition', async () => {
+    let resolveReleased
+    const released = new Promise(resolve => { resolveReleased = resolve })
+
+    const client = {
+      release () {
+        resolveReleased()
+      },
+    }
+    const pool = {
+      async connect () {
+        cancel()
+
+        return client
+      },
+    }
+
+    await expect(withAdvisoryLock(context, logger, pool, 111, 222, async () => {})).rejects.toThrow('Canceled')
+    await expect(released).resolves.toBeUndefined()
   })
 })

@@ -122,11 +122,17 @@ function createContext (logger, options = {}) {
  */
 async function doInterminable (context, fn, cleanup) {
   assertRunning(context)
-  let promise
-  const removeCleanup = cleanup && context.onceDone(doneError => cleanup(promise, doneError))
+
+  let promise, resolvePromiseAvailable
+  const promiseAvailable = new Promise(resolve => { resolvePromiseAvailable = resolve })
+
+  const removeCleanup = cleanup && context.onceDone(doneError => {
+    promiseAvailable.then(() => cleanup(promise, doneError))
+  })
 
   async function executeAndRemoveCleanup () {
     promise = (async () => fn())()
+    resolvePromiseAvailable()
 
     try {
       return await promise
