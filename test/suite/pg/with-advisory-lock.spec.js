@@ -69,7 +69,7 @@ describe('withAdvisoryLock()', () => {
       async connect () {
         cancel()
 
-        setImmediate(() => resolveThrown())
+        setImmediate(resolveThrown)
         throw new Error('error-a')
       },
     }
@@ -91,7 +91,7 @@ describe('withAdvisoryLock()', () => {
 
     const client = {
       release () {
-        setImmediate(() => resolveReleased())
+        setImmediate(resolveReleased)
 
         throw new Error('error-a')
       },
@@ -110,6 +110,92 @@ describe('withAdvisoryLock()', () => {
     await expect(released).resolves.toBeUndefined()
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('Unable to cleanly release Postgres client: Error: error-a'),
+    )
+  })
+
+  it('should handle termination during lock acquisition', async () => {
+    let resolveUnlocked
+    const unlocked = new Promise(resolve => { resolveUnlocked = resolve })
+
+    const client = {
+      async query (text) {
+        cancel()
+
+        if (text.includes('pg_advisory_unlock')) resolveUnlocked()
+      },
+      release () {},
+    }
+    const pool = {
+      async connect () {
+        return client
+      },
+    }
+
+    await expect(withAdvisoryLock(context, logger, pool, 111, 222, async () => {})).rejects.toThrow('Canceled')
+    await expect(unlocked).resolves.toBeUndefined()
+  })
+
+  it('should handle termination during lock acquisition, and subsequent lock acquisition errors', async () => {
+    let resolveThrown
+    const thrown = new Promise(resolve => { resolveThrown = resolve })
+
+    const client = {
+      async query (text) {
+        cancel()
+
+        if (text.includes('pg_advisory_lock')) {
+          setImmediate(resolveThrown)
+
+          throw new Error('error-a')
+        }
+      },
+      release () {},
+    }
+    const pool = {
+      async connect () {
+        return client
+      },
+    }
+
+    jest.spyOn(client, 'query')
+    jest.spyOn(logger, 'debug')
+
+    await expect(withAdvisoryLock(context, logger, pool, 111, 222, async () => {})).rejects.toThrow('Canceled')
+    await expect(thrown).resolves.toBeUndefined()
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringContaining('Postgres advisory lock acquisition failed during cleanup: Error: error-a'),
+    )
+    expect(client.query).not.toHaveBeenCalledWith(expect.stringContaining('pg_advisory_unlock'), expect.anything())
+  })
+
+  it('should handle termination during lock acquisition, and subsequent lock release errors', async () => {
+    let resolveUnlocked
+    const unlocked = new Promise(resolve => { resolveUnlocked = resolve })
+
+    const client = {
+      async query (text) {
+        cancel()
+
+        if (text.includes('pg_advisory_unlock')) {
+          setImmediate(resolveUnlocked)
+
+          throw new Error('error-a')
+        }
+      },
+      release () {},
+    }
+    const pool = {
+      async connect () {
+        return client
+      },
+    }
+
+    jest.spyOn(logger, 'warn')
+
+    await expect(withAdvisoryLock(context, logger, pool, 111, 222, async () => {})).rejects.toThrow('Canceled')
+    await expect(unlocked).resolves.toBeUndefined()
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Unable to cleanly release Postgres advisory lock: Error: error-a'),
     )
   })
 })

@@ -19,7 +19,17 @@ async function withAdvisoryLock (context, logger, pool, namespace, id, fn) {
 async function withClient (context, logger, pool, fn) {
   return withDefer(async defer => {
     const client = await acquireClient(context, logger, pool)
-    defer(recover => { client.release(recover()) })
+    defer(recover => {
+      const error = recover()
+
+      if (error) {
+        client.release(true)
+
+        throw error
+      }
+
+      client.release()
+    })
 
     return fn(client)
   })
