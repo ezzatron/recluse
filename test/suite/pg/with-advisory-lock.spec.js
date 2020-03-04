@@ -57,4 +57,59 @@ describe('withAdvisoryLock()', () => {
     await expect(withAdvisoryLock(context, logger, pool, 111, 222, async () => {})).rejects.toThrow('Canceled')
     await expect(released).resolves.toBeUndefined()
   })
+
+  it('should handle termination during client acquisition, and subsequent pool connect errors', async () => {
+    let resolveThrown
+    const thrown = new Promise(resolve => { resolveThrown = resolve })
+
+    const client = {
+      release () {},
+    }
+    const pool = {
+      async connect () {
+        cancel()
+
+        setImmediate(() => resolveThrown())
+        throw new Error('error-a')
+      },
+    }
+
+    jest.spyOn(client, 'release')
+    jest.spyOn(logger, 'debug')
+
+    await expect(withAdvisoryLock(context, logger, pool, 111, 222, async () => {})).rejects.toThrow('Canceled')
+    await expect(thrown).resolves.toBeUndefined()
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringContaining('Postgres client acquisition failed during cleanup: Error: error-a'),
+    )
+    expect(client.release).not.toHaveBeenCalled()
+  })
+
+  it('should handle termination during client acquisition, and subsequent client release errors', async () => {
+    let resolveReleased
+    const released = new Promise(resolve => { resolveReleased = resolve })
+
+    const client = {
+      release () {
+        setImmediate(() => resolveReleased())
+
+        throw new Error('error-a')
+      },
+    }
+    const pool = {
+      async connect () {
+        cancel()
+
+        return client
+      },
+    }
+
+    jest.spyOn(logger, 'warn')
+
+    await expect(withAdvisoryLock(context, logger, pool, 111, 222, async () => {})).rejects.toThrow('Canceled')
+    await expect(released).resolves.toBeUndefined()
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Unable to cleanly release Postgres client: Error: error-a'),
+    )
+  })
 })

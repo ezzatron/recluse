@@ -41,6 +41,8 @@ async function acquireAdvisoryLock (context, logger, client, namespace, id) {
       try {
         await promise
       } catch (error) {
+        logger.debug(`Postgres advisory lock acquisition failed during cleanup: ${error.stack}`)
+
         return // lock was never acquired
       }
 
@@ -63,6 +65,8 @@ async function acquireClient (context, logger, pool) {
       try {
         client = await promise
       } catch (error) {
+        logger.debug(`Postgres client acquisition failed during cleanup: ${error.stack}`)
+
         return // client was never acquired
       }
 
