@@ -9,11 +9,13 @@ module.exports = {
  * a unit of work.
  */
 async function withAdvisoryLock (context, logger, pool, namespace, id, fn) {
-  return withClient(context, logger, pool, async client => withDefer(async defer => {
-    defer(await acquireAdvisoryLock(context, logger, client, namespace, id))
+  return withDefer(async defer => {
+    return withClient(context, logger, pool, async client => {
+      defer(await acquireAdvisoryLock(context, logger, client, namespace, id))
 
-    return fn()
-  }))
+      return fn()
+    })
+  })
 }
 
 async function withClient (context, logger, pool, fn) {
