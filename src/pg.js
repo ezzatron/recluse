@@ -1,7 +1,32 @@
+const Cursor = require('pg-cursor')
+
 const {doInterminable, withDefer} = require('./async.js')
 
 module.exports = {
+  consumeQuery,
   withAdvisoryLock,
+}
+
+/**
+ * Executes a query and feeds the rows one-by-one into a consumer function.
+ *
+ * The consumer function should return a boolean to indicate whether to continue
+ * consuming rows.
+ */
+async function consumeQuery (context, logger, pool, text, values, fn) {
+  return withDefer(async defer => {
+    return withClient(context, logger, pool, async client => {
+      const cursor = await createCursor(context, logger, client, text, values)
+      defer(() => closeCursor(context, logger, cursor))
+
+      let shouldContinue = true
+
+      while (shouldContinue) {
+        const row = await readFromCursor(context, logger, cursor)
+        shouldContinue = row && await fn(row)
+      }
+    })
+  })
 }
 
 /**
@@ -89,4 +114,56 @@ async function acquireClient (context, logger, pool) {
       }
     },
   )
+}
+
+async function createCursor (context, logger, client, text, values) {
+  return doInterminable(
+    context,
+    async () => client.query(new Cursor(text, values)),
+    async promise => {
+      let cursor
+
+      try {
+        cursor = await promise
+      } catch (error) {
+        logger.debug(`Postgres cursor query failed during cleanup: ${error.stack}`)
+
+        return // query was never submitted
+      }
+
+      try {
+        await closeCursorAsync(logger, cursor)
+      } catch (error) {
+        logger.warn(`Unable to cleanly close Postgres cursor: ${error.stack}`)
+      }
+    },
+  )
+}
+
+async function closeCursor (context, logger, cursor) {
+  return doInterminable(context, () => closeCursorAsync(logger, cursor))
+}
+
+function closeCursorAsync (logger, cursor) {
+  return new Promise((resolve, reject) => {
+    cursor.close(error => {
+      if (error) return reject(error)
+
+      resolve()
+    })
+  })
+}
+
+async function readFromCursor (context, logger, cursor) {
+  return doInterminable(context, () => readFromCursorAsync(logger, cursor))
+}
+
+function readFromCursorAsync (logger, cursor) {
+  return new Promise((resolve, reject) => {
+    cursor.read(1, (error, rows) => {
+      if (error) return reject(error)
+
+      resolve(rows[0])
+    })
+  })
 }

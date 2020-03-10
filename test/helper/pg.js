@@ -85,17 +85,17 @@ function createTestHelper (options = {}) {
     await pool.end()
 
     if (schemas.length > 0) {
-      const dropClient = new Client(config)
-      await dropClient.connect()
+      const client = new Client(config)
+      await client.connect()
 
       try {
-        await inTransaction(dropClient, async () => {
+        await inTransaction(client, async () => {
           for (const schema of schemas) {
-            await dropClient.query(`DROP SCHEMA ${schema} CASCADE`)
+            await client.query(`DROP SCHEMA ${schema} CASCADE`)
           }
         })
       } finally {
-        await dropClient.end()
+        await client.end()
       }
     }
   })
