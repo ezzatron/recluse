@@ -4,6 +4,7 @@ const {doInterminable, withDefer} = require('./async.js')
 
 module.exports = {
   consumeQuery,
+  inTransaction,
   withAdvisoryLock,
 }
 
@@ -26,6 +27,32 @@ async function consumeQuery (context, logger, pool, text, values, fn) {
         shouldContinue = row && await fn(row)
       }
     })
+  })
+}
+
+/**
+ * Executes a function while maintaining a transaction.
+ *
+ * The transaction will either be committed when the call resolves, or rolled
+ * back when the call rejects.
+ */
+async function inTransaction (context, logger, client, fn) {
+  return withDefer(async defer => {
+    await query(context, logger, client, 'BEGIN')
+
+    defer(async recover => {
+      const error = recover()
+
+      if (error) {
+        await query(context, logger, client, 'ROLLBACK')
+
+        throw error
+      }
+
+      await query(context, logger, client, 'COMMIT')
+    })
+
+    return fn()
   })
 }
 
@@ -166,4 +193,8 @@ function readFromCursorAsync (logger, cursor) {
       resolve(rows[0])
     })
   })
+}
+
+async function query (context, logger, client, text, values) {
+  return doInterminable(context, () => client.query(text, values))
 }
