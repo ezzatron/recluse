@@ -38,17 +38,13 @@ async function consumeContinuousQuery (context, logger, pool, channel, nextOffse
 
       let shouldContinue = true
       let offset = start
-      let nextNotification, notificationContext
 
       while (shouldContinue) {
         assertRunning(context)
 
-        if (!nextNotification) {
-          notificationContext = createContext(logger, {context, timeout})
-          nextNotification = waitForNotification(notificationContext, logger, client, channel)
-            .catch(() => {}) // if this rejects, we just attempt another query anyway
-            .then(() => { nextNotification = null })
-        }
+        const [notificationContext] = createContext(logger, {context, timeout})
+        const nextNotification = waitForNotification(notificationContext, logger, client, channel)
+        nextNotification.catch(() => {})
 
         const options = {values: [offset, ...values]}
         shouldContinue = await consumeQuery(context, logger, pool, text, options, row => {

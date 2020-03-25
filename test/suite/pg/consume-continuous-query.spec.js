@@ -76,6 +76,54 @@ describe('consumeContinuousQuery()', () => {
     }
   })
 
+  it('should be able to continuously consume a query using timeouts', async () => {
+    const rows = []
+
+    let resolveFirstRowRead, resolveSecondRowRead
+    const firstRowRead = new Promise(resolve => { resolveFirstRowRead = resolve })
+    const secondRowRead = new Promise(resolve => { resolveSecondRowRead = resolve })
+
+    const performQuery = consumeContinuousQuery(
+      context,
+      logger,
+      pgHelper.pool,
+      'test_channel',
+      row => row.entry + 1,
+      'SELECT * FROM test.entries WHERE entry = $1',
+      {},
+      async row => {
+        rows.push(row)
+
+        if (row.entry < 1) {
+          resolveFirstRowRead()
+
+          return true
+        }
+
+        resolveSecondRowRead()
+
+        return false
+      },
+    )
+    const insert0 = performInsert(0)
+    const insert1 = firstRowRead.then(() => performInsert(1))
+    const insert2 = secondRowRead.then(() => performInsert(2))
+
+    await Promise.all([performQuery, insert0, insert1, insert2])
+
+    expect(rows).toEqual([
+      {entry: 0},
+      {entry: 1},
+    ])
+
+    async function performInsert (entry) {
+      return pgHelper.inTransaction(async client => {
+        await client.query('INSERT INTO test.entries VALUES ($1)', [entry])
+        jest.runAllTimers()
+      })
+    }
+  })
+
   it('should throw errors for invalid queries', async () => {
     const task = consumeContinuousQuery(
       context,
