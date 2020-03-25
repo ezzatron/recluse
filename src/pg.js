@@ -1,11 +1,72 @@
 const Cursor = require('pg-cursor')
 
-const {doInterminable, withDefer} = require('./async.js')
+const {assertRunning, createContext, doInterminable, isTimedOut, withDefer} = require('./async.js')
 
 module.exports = {
+  consumeContinuousQuery,
   consumeQuery,
   inTransaction,
   withAdvisoryLock,
+}
+
+/**
+ * Continuously executes a query and feeds the rows one-by-one into a consumer
+ * function.
+ *
+ * A channel name must be provided. This channel will be listened to for new
+ * notifications, which indicate that more rows are ready to read.
+ *
+ * The nextOffset function will be passed each row, and should return the next
+ * offset to feed back into the query. This offset is used as the first query
+ * parameter.
+ *
+ * The consumer function should return a boolean to indicate whether to continue
+ * consuming rows.
+ */
+async function consumeContinuousQuery (context, logger, pool, channel, nextOffset, text, options, fn) {
+  return withDefer(async defer => {
+    return withClient(context, logger, pool, async client => {
+      const {start = 0, timeout = 100, values = []} = options
+
+      await query(context, logger, client, `LISTEN ${channel}`)
+      defer(async recover => {
+        const error = recover()
+        if (error) throw error
+
+        await query(context, logger, client, `UNLISTEN ${channel}`)
+      })
+
+      let shouldContinue = true
+      let offset = start
+      let nextNotification, notificationContext
+
+      while (shouldContinue) {
+        assertRunning(context)
+
+        if (!nextNotification) {
+          notificationContext = createContext(logger, {context, timeout})
+          nextNotification = waitForNotification(notificationContext, logger, client, channel)
+            .catch(() => {}) // if this rejects, we just attempt another query anyway
+            .then(() => { nextNotification = null })
+        }
+
+        const options = {values: [offset, ...values]}
+        shouldContinue = await consumeQuery(context, logger, pool, text, options, row => {
+          offset = nextOffset(row)
+
+          return fn(row)
+        })
+
+        if (!shouldContinue) break
+
+        try {
+          await nextNotification
+        } catch (error) {
+          if (!isTimedOut(error)) throw error
+        }
+      }
+    })
+  })
 }
 
 /**
@@ -13,10 +74,14 @@ module.exports = {
  *
  * The consumer function should return a boolean to indicate whether to continue
  * consuming rows.
+ *
+ * Returns a boolean indicating whether the query was completely consumed.
  */
-async function consumeQuery (context, logger, pool, text, values, fn) {
+async function consumeQuery (context, logger, pool, text, options, fn) {
   return withDefer(async defer => {
     return withClient(context, logger, pool, async client => {
+      const {values = []} = options
+
       const cursor = await createCursor(context, logger, client, text, values)
       defer(() => closeCursor(context, logger, cursor))
 
@@ -24,8 +89,13 @@ async function consumeQuery (context, logger, pool, text, values, fn) {
 
       while (shouldContinue) {
         const row = await readFromCursor(context, logger, cursor)
-        shouldContinue = row && await fn(row)
+
+        if (!row) return true
+
+        shouldContinue = await fn(row)
       }
+
+      return false
     })
   })
 }
@@ -197,4 +267,34 @@ function readFromCursorAsync (logger, cursor) {
 
 async function query (context, logger, client, text, values) {
   return doInterminable(context, () => client.query(text, values))
+}
+
+async function waitForNotification (context, logger, client, channel) {
+  return doInterminable(context, () => waitForNotificationAsync(client, channel))
+}
+
+function waitForNotificationAsync (client, channel) {
+  return new Promise((resolve, reject) => {
+    function onEnd (error) {
+      removeListeners()
+      reject(error || new Error('Client disconnected while waiting for notification'))
+    }
+
+    function onNotification (notification) {
+      if (notification.channel !== channel) return
+
+      removeListeners()
+      resolve(notification)
+    }
+
+    function removeListeners () {
+      client.removeListener('end', onEnd)
+      client.removeListener('error', onEnd)
+      client.removeListener('notification', onNotification)
+    }
+
+    client.on('end', onEnd)
+    client.on('error', onEnd)
+    client.on('notification', onNotification)
+  })
 }
