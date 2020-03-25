@@ -31,9 +31,8 @@ describe('consumeContinuousQuery()', () => {
   it('should be able to continuously consume a query using notifications', async () => {
     const rows = []
 
-    let resolveFirstRowRead, resolveSecondRowRead
+    let resolveFirstRowRead
     const firstRowRead = new Promise(resolve => { resolveFirstRowRead = resolve })
-    const secondRowRead = new Promise(resolve => { resolveSecondRowRead = resolve })
 
     const performQuery = consumeContinuousQuery(
       context,
@@ -46,22 +45,17 @@ describe('consumeContinuousQuery()', () => {
       async row => {
         rows.push(row)
 
-        if (row.entry < 1) {
-          resolveFirstRowRead()
+        if (row.entry > 0) return false
 
-          return true
-        }
+        resolveFirstRowRead()
 
-        resolveSecondRowRead()
-
-        return false
+        return true
       },
     )
     const insert0 = performInsert(0)
     const insert1 = firstRowRead.then(() => performInsert(1))
-    const insert2 = secondRowRead.then(() => performInsert(2))
 
-    await Promise.all([performQuery, insert0, insert1, insert2])
+    await Promise.all([performQuery, insert0, insert1])
 
     expect(rows).toEqual([
       {entry: 0},
@@ -79,9 +73,8 @@ describe('consumeContinuousQuery()', () => {
   it('should be able to continuously consume a query using timeouts', async () => {
     const rows = []
 
-    let resolveFirstRowRead, resolveSecondRowRead
+    let resolveFirstRowRead
     const firstRowRead = new Promise(resolve => { resolveFirstRowRead = resolve })
-    const secondRowRead = new Promise(resolve => { resolveSecondRowRead = resolve })
 
     const performQuery = consumeContinuousQuery(
       context,
@@ -94,22 +87,17 @@ describe('consumeContinuousQuery()', () => {
       async row => {
         rows.push(row)
 
-        if (row.entry < 1) {
-          resolveFirstRowRead()
+        if (row.entry > 0) return false
 
-          return true
-        }
+        resolveFirstRowRead()
 
-        resolveSecondRowRead()
-
-        return false
+        return true
       },
     )
     const insert0 = performInsert(0)
     const insert1 = firstRowRead.then(() => performInsert(1))
-    const insert2 = secondRowRead.then(() => performInsert(2))
 
-    await Promise.all([performQuery, insert0, insert1, insert2])
+    await Promise.all([performQuery, insert0, insert1])
 
     expect(rows).toEqual([
       {entry: 0},
