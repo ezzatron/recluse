@@ -1,12 +1,28 @@
+const {types: {builtins: {TIMESTAMP, TIMESTAMPTZ}, getTypeParser, setTypeParser}} = require('pg')
 const Cursor = require('pg-cursor')
 
 const {assertRunning, createContext, doInterminable, isTimedOut, withDefer} = require('./async.js')
 
 module.exports = {
+  configure,
   consumeContinuousQuery,
   consumeQuery,
   inTransaction,
   withAdvisoryLock,
+}
+
+function configure () {
+  const noParse = getTypeParser()
+  const timestampParser = getTypeParser(TIMESTAMP)
+  const timestamptzParser = getTypeParser(TIMESTAMPTZ)
+
+  setTypeParser(TIMESTAMP, noParse)
+  setTypeParser(TIMESTAMPTZ, noParse)
+
+  return function restore () {
+    setTypeParser(TIMESTAMP, timestampParser)
+    setTypeParser(TIMESTAMPTZ, timestamptzParser)
+  }
 }
 
 /**
