@@ -40,46 +40,31 @@ function configure () {
  * consuming rows.
  */
 async function consumeContinuousQuery (context, logger, pool, channel, nextOffset, text, options, fn) {
-  return withDefer(async defer => {
-    return withClient(context, logger, pool, async client => {
-      const {start = 0, timeout = 100, values = []} = options
+  return withNotificationListener(context, logger, pool, channel, async waitForNotification => {
+    const {start = 0, timeout = 100, values = []} = options
+    let shouldContinue = true
+    let offset = start
 
-      await query(context, logger, client, `LISTEN ${channel}`)
-      defer(async recover => {
-        const error = recover()
-        if (error) throw error
+    while (shouldContinue) {
+      assertRunning(context)
 
-        await query(context, logger, client, `UNLISTEN ${channel}`)
+      const options = {values: [offset, ...values]}
+      shouldContinue = await consumeQuery(context, logger, pool, text, options, row => {
+        offset = nextOffset(row)
+
+        return fn(row)
       })
 
-      let shouldContinue = true
-      let offset = start
+      if (!shouldContinue) break
 
-      while (shouldContinue) {
-        assertRunning(context)
+      const [notificationContext] = createContext(logger, {context, timeout})
 
-        shouldContinue = await withNotificationListener(context, logger, pool, channel, async waitForNotification => {
-          const options = {values: [offset, ...values]}
-          const shouldContinue = await consumeQuery(context, logger, pool, text, options, row => {
-            offset = nextOffset(row)
-
-            return fn(row)
-          })
-
-          if (!shouldContinue) return false
-
-          const [notificationContext] = createContext(logger, {context, timeout})
-
-          try {
-            await waitForNotification(notificationContext)
-          } catch (error) {
-            if (!isTimedOut(error)) throw error
-          }
-
-          return true
-        })
+      try {
+        await waitForNotification(notificationContext)
+      } catch (error) {
+        if (!isTimedOut(error)) throw error
       }
-    })
+    }
   })
 }
 
@@ -287,7 +272,19 @@ async function withNotificationListener (context, logger, pool, channel, fn) {
   return withDefer(async defer => {
     return withClient(context, logger, pool, async client => {
       let notified, resolveNotified, rejectNotified
-      let isNotified = false
+
+      await query(context, logger, client, `LISTEN ${channel}`)
+      defer(async recover => {
+        const error = recover()
+        if (error) throw error
+
+        await query(context, logger, client, `UNLISTEN ${channel}`)
+      })
+
+      client.on('end', onEnd)
+      client.on('error', onEnd)
+      client.on('notification', onNotification)
+      defer(removeListeners)
 
       function onEnd (error) {
         removeListeners()
@@ -299,12 +296,7 @@ async function withNotificationListener (context, logger, pool, channel, fn) {
       }
 
       function onNotification (notification) {
-        if (notification.channel !== channel) return
-
-        removeListeners()
-
-        isNotified = true
-        if (resolveNotified) resolveNotified()
+        if (notification.channel === channel && resolveNotified) resolveNotified()
       }
 
       function removeListeners () {
@@ -313,14 +305,7 @@ async function withNotificationListener (context, logger, pool, channel, fn) {
         client.removeListener('notification', onNotification)
       }
 
-      client.on('end', onEnd)
-      client.on('error', onEnd)
-      client.on('notification', onNotification)
-      defer(removeListeners)
-
       async function wait (context) {
-        if (isNotified) return
-
         if (!notified) {
           notified = doInterminable(
             context,
@@ -328,6 +313,8 @@ async function withNotificationListener (context, logger, pool, channel, fn) {
               return new Promise((resolve, reject) => {
                 resolveNotified = resolve
                 rejectNotified = reject
+              }).then(() => {
+                notified = null
               })
             },
           )
