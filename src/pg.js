@@ -11,6 +11,11 @@ module.exports = {
   withAdvisoryLock,
 }
 
+/**
+ * Congifure pg to not convert timestamps into dates.
+ *
+ * Returns a callback that will restore pg to its original state.
+ */
 function configure () {
   const noParse = getTypeParser()
   const timestampParser = getTypeParser(TIMESTAMP)
