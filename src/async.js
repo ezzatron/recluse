@@ -23,7 +23,11 @@ module.exports = {
   withDefer,
 }
 
+const CONTEXT = Symbol('CONTEXT')
+
 function assertRunning (context) {
+  if (!(context && context[CONTEXT])) throw new Error('Invalid context supplied')
+
   const {doneError} = context
 
   if (doneError) throw doneError
@@ -48,6 +52,8 @@ function createContext (logger, options = {}) {
 
   return [
     {
+      [CONTEXT]: true,
+
       get done () {
         if (!done) done = new Promise((resolve, reject) => { doneReject = reject })
 
@@ -162,6 +168,7 @@ async function doInterminable (context, fn, cleanup) {
  */
 async function doTerminable (context, fn, abort) {
   assertRunning(context)
+
   const removeAbort = context.onceDone(abort)
 
   try {

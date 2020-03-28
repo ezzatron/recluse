@@ -19,8 +19,6 @@ describe('consumeContinuousQuery()', () => {
       const created = createContext(logger)
       context = created[0]
       cancel = created[1]
-
-      jest.useFakeTimers()
     },
 
     async afterEach () {
@@ -45,26 +43,27 @@ describe('consumeContinuousQuery()', () => {
       async row => {
         rows.push(row)
 
-        if (row.entry > 0) return false
+        if (row.entry > 1) return false
 
         resolveFirstRowRead()
 
         return true
       },
     )
-    const insert0 = performInsert(0)
-    const insert1 = firstRowRead.then(() => performInsert(1))
+    const insert0And1 = performInsert(0, 1)
+    const insert2And3 = firstRowRead.then(() => performInsert(2, 3))
 
-    await Promise.all([performQuery, insert0, insert1])
+    await Promise.all([performQuery, insert0And1, insert2And3])
 
     expect(rows).toEqual([
       {entry: 0},
       {entry: 1},
+      {entry: 2},
     ])
 
-    async function performInsert (entry) {
+    async function performInsert (...entries) {
       return pgHelper.inTransaction(async client => {
-        await client.query('INSERT INTO test.entries VALUES ($1)', [entry])
+        for (const entry of entries) await client.query('INSERT INTO test.entries VALUES ($1)', [entry])
         await client.query('NOTIFY test_channel')
       })
     }
@@ -83,31 +82,31 @@ describe('consumeContinuousQuery()', () => {
       'test_channel',
       row => row.entry + 1,
       'SELECT * FROM test.entries WHERE entry = $1',
-      {},
+      {timeout: 1},
       async row => {
         rows.push(row)
 
-        if (row.entry > 0) return false
+        if (row.entry > 1) return false
 
         resolveFirstRowRead()
 
         return true
       },
     )
-    const insert0 = performInsert(0)
-    const insert1 = firstRowRead.then(() => performInsert(1))
+    const insert0And1 = performInsert(0, 1)
+    const insert2And3 = firstRowRead.then(() => performInsert(2, 3))
 
-    await Promise.all([performQuery, insert0, insert1])
+    await Promise.all([performQuery, insert0And1, insert2And3])
 
     expect(rows).toEqual([
       {entry: 0},
       {entry: 1},
+      {entry: 2},
     ])
 
-    async function performInsert (entry) {
+    async function performInsert (...entries) {
       return pgHelper.inTransaction(async client => {
-        await client.query('INSERT INTO test.entries VALUES ($1)', [entry])
-        jest.runAllTimers()
+        for (const entry of entries) await client.query('INSERT INTO test.entries VALUES ($1)', [entry])
       })
     }
   })
