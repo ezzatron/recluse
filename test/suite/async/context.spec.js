@@ -1,4 +1,13 @@
-const {createContext, doInterminable, doTerminable, isCanceled, isDone, isTimedOut} = require('../../../src/async.js')
+const {
+  assertRunning,
+  createContext,
+  doInterminable,
+  doTerminable,
+  isCanceled,
+  isDone,
+  isTimedOut,
+} = require('../../../src/async.js')
+
 const {createLogger} = require('../../helper/logging.js')
 
 describe('Async context', () => {
@@ -78,6 +87,22 @@ describe('Async context', () => {
 
   afterEach(() => {
     cancel()
+  })
+
+  describe('assertRunning()', () => {
+    it('should not throw an error if the context is running', () => {
+      expect(() => assertRunning(context)).not.toThrow()
+    })
+
+    it('should throw an error if the context is not running', () => {
+      cancel()
+      expect(() => assertRunning(context)).toThrow('Canceled')
+    })
+
+    it('should throw an error if a non-context is supplied', () => {
+      expect(() => assertRunning()).toThrow('Invalid context supplied')
+      expect(() => assertRunning({})).toThrow('Invalid context supplied')
+    })
   })
 
   describe('doInterminable()', () => {
