@@ -20,14 +20,13 @@ describe('executeCommands()', () => {
 
   const pgHelper = createTestHelper({
     async beforeEach () {
-      restore = configure()
-
       logger = createLogger()
 
       const created = createContext(logger)
       context = created[0]
       cancel = created[1]
 
+      restore = configure()
       pgHelper.trackSchemas('recluse')
       await initializeSchema(context, logger, pgHelper.pool)
     },

@@ -1,10 +1,11 @@
 const {COMMAND: CHANNEL} = require('./channel.js')
 const {createLazyGetter} = require('./object.js')
-const {consumeQuery, inPoolTransaction} = require('./pg.js')
+const {consumeContinuousQuery, consumeQuery, inPoolTransaction} = require('./pg.js')
 
 module.exports = {
   executeCommands,
   readCommands,
+  readUnhandledCommandsContinuously,
 }
 
 async function executeCommands (context, logger, pool, serialization, source, commands) {
@@ -31,6 +32,21 @@ async function readCommands (context, logger, pool, serialization, id, fn) {
     pool,
     'SELECT * FROM recluse.command WHERE id >= $1 ORDER BY id',
     {values: [id]},
+    async row => fn(marshal(serialization, row)),
+  )
+}
+
+function readUnhandledCommandsContinuously (context, logger, pool, serialization, options, fn) {
+  const {timeout} = options
+
+  return consumeContinuousQuery(
+    context,
+    logger,
+    pool,
+    CHANNEL,
+    ({id}) => id + 1,
+    'SELECT * FROM recluse.command WHERE handled_at IS NULL AND id >= $1 ORDER BY id',
+    {timeout},
     async row => fn(marshal(serialization, row)),
   )
 }
