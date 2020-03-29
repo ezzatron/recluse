@@ -60,7 +60,9 @@ describe('readCommands()', () => {
 
   describe('with existing commands', () => {
     beforeEach(async () => {
-      await executeCommands(context, logger, pgHelper.pool, serialization, sourceA, [commandA, commandB])
+      await pgHelper.inTransaction(
+        client => executeCommands(context, logger, client, serialization, sourceA, [commandA, commandB]),
+      )
     })
 
     it('should return the correct commands for ID 0', async () => {

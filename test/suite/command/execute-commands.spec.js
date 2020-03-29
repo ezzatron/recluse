@@ -39,7 +39,9 @@ describe('executeCommands()', () => {
 
   describe('with no commands', () => {
     it('should be able to record commands', async () => {
-      await executeCommands(context, logger, pgHelper.pool, serialization, sourceA, [commandA, commandB])
+      await pgHelper.inTransaction(
+        client => executeCommands(context, logger, client, serialization, sourceA, [commandA, commandB]),
+      )
 
       const commands = []
       await readCommands(context, logger, pgHelper.pool, serialization, 0, ({command}) => {
@@ -53,7 +55,9 @@ describe('executeCommands()', () => {
 
     it('should be able to record commands with null data', async () => {
       const command = {type: commandTypeA, data: null}
-      await executeCommands(context, logger, pgHelper.pool, serialization, sourceA, [command])
+      await pgHelper.inTransaction(
+        client => executeCommands(context, logger, client, serialization, sourceA, [command]),
+      )
 
       const commands = []
       await readCommands(context, logger, pgHelper.pool, serialization, 0, ({command}) => {
@@ -67,7 +71,9 @@ describe('executeCommands()', () => {
 
     it('should be able to record commands with undefined data', async () => {
       const command = {type: commandTypeA}
-      await executeCommands(context, logger, pgHelper.pool, serialization, sourceA, [command])
+      await pgHelper.inTransaction(
+        client => executeCommands(context, logger, client, serialization, sourceA, [command]),
+      )
 
       const commands = []
       await readCommands(context, logger, pgHelper.pool, serialization, 0, ({command}) => {
@@ -82,11 +88,15 @@ describe('executeCommands()', () => {
 
   describe('with existing commands', () => {
     beforeEach(async () => {
-      await executeCommands(context, logger, pgHelper.pool, serialization, sourceA, [commandA, commandB])
+      await pgHelper.inTransaction(
+        client => executeCommands(context, logger, client, serialization, sourceA, [commandA, commandB]),
+      )
     })
 
     it('should be able to record commands', async () => {
-      await executeCommands(context, logger, pgHelper.pool, serialization, sourceA, [commandC, commandD])
+      await pgHelper.inTransaction(
+        client => executeCommands(context, logger, client, serialization, sourceA, [commandC, commandD]),
+      )
 
       const commands = []
       await readCommands(context, logger, pgHelper.pool, serialization, 2, ({command}) => {
@@ -118,7 +128,7 @@ describe('executeCommands()', () => {
 
       const task = Promise.all([
         notified,
-        executeCommands(context, logger, pgHelper.pool, serialization, sourceA, [commandA]),
+        pgHelper.inTransaction(client => executeCommands(context, logger, client, serialization, sourceA, [commandA])),
       ])
 
       await expect(task).resolves.toEqual([CHANNEL, undefined])

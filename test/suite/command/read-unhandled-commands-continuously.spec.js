@@ -36,7 +36,9 @@ describe('readUnhandledCommandsContinuously()', () => {
 
   describe('with only unhandled commands', () => {
     beforeEach(async () => {
-      await executeCommands(context, logger, pgHelper.pool, serialization, sourceA, [commandA, commandB])
+      await pgHelper.inTransaction(
+        client => executeCommands(context, logger, client, serialization, sourceA, [commandA, commandB]),
+      )
     })
 
     it('should return all commands', async () => {
@@ -56,8 +58,10 @@ describe('readUnhandledCommandsContinuously()', () => {
 
   describe('with some handled commands', () => {
     beforeEach(async () => {
-      await executeCommands(context, logger, pgHelper.pool, serialization, sourceA, [commandA, commandB])
-      await pgHelper.inTransaction(client => client.query('UPDATE recluse.command SET handled_at = now() WHERE id = 0'))
+      await pgHelper.inTransaction(async client => {
+        await executeCommands(context, logger, client, serialization, sourceA, [commandA, commandB])
+        await client.query('UPDATE recluse.command SET handled_at = now() WHERE id = 0')
+      })
     })
 
     it('should return only the unhandled commands', async () => {
