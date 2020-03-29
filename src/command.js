@@ -1,6 +1,6 @@
 const {COMMAND: CHANNEL} = require('./channel.js')
 const {createLazyGetter} = require('./object.js')
-const {consumeContinuousQuery, consumeQuery} = require('./pg.js')
+const {consumeContinuousQuery, consumeQuery, query} = require('./pg.js')
 
 module.exports = {
   executeCommands,
@@ -17,13 +17,16 @@ async function executeCommands (context, logger, client, serialization, source, 
   for (const command of commands) {
     const {type, data} = command
 
-    await client.query(
+    await query(
+      context,
+      logger,
+      client,
       'INSERT INTO recluse.command (source, type, data) VALUES ($1, $2, $3)',
       [source, type, serialize(data)],
     )
   }
 
-  await client.query(`NOTIFY ${CHANNEL}`)
+  await query(context, logger, client, `NOTIFY ${CHANNEL}`)
 }
 
 /**

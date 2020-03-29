@@ -9,6 +9,7 @@ module.exports = {
   consumeQuery,
   inPoolTransaction,
   inTransaction,
+  query,
   withAdvisoryLock,
   withClient,
 }
@@ -159,6 +160,15 @@ async function inTransaction (context, logger, client, fn) {
 }
 
 /**
+ * Perform a query and return the result.
+ *
+ * This function utilizes a context for cancellation / timeout support.
+ */
+async function query (context, logger, client, text, values) {
+  return doInterminable(context, () => client.query(text, values))
+}
+
+/**
  * Uses an advisory lock for a particular namespace / ID combination to perform
  * a unit of work.
  */
@@ -298,10 +308,6 @@ function readFromCursorAsync (logger, cursor) {
       resolve(rows[0])
     })
   })
-}
-
-async function query (context, logger, client, text, values) {
-  return doInterminable(context, () => client.query(text, values))
 }
 
 async function withNotificationListener (context, logger, pool, channel, fn) {

@@ -1,4 +1,4 @@
-const {inPoolTransaction} = require('./pg.js')
+const {inPoolTransaction, query} = require('./pg.js')
 
 module.exports = {
   initializeSchema,
@@ -9,10 +9,12 @@ module.exports = {
  */
 async function initializeSchema (context, logger, pool) {
   return inPoolTransaction(context, logger, pool, async client => {
-    await client.query('CREATE SCHEMA IF NOT EXISTS recluse')
+    const clientQuery = query.bind(null, context, logger, client)
 
-    await client.query('CREATE SEQUENCE IF NOT EXISTS recluse.commandIdSeq AS bigint MINVALUE 0')
-    await client.query(`
+    await clientQuery('CREATE SCHEMA IF NOT EXISTS recluse')
+
+    await clientQuery('CREATE SEQUENCE IF NOT EXISTS recluse.commandIdSeq AS bigint MINVALUE 0')
+    await clientQuery(`
       CREATE TABLE IF NOT EXISTS recluse.command
       (
         id bigint NOT NULL DEFAULT nextval('recluse.commandIdSeq'),
@@ -25,6 +27,6 @@ async function initializeSchema (context, logger, pool) {
         PRIMARY KEY (id)
       )
     `)
-    await client.query('ALTER SEQUENCE recluse.commandIdSeq OWNED BY recluse.command.id')
+    await clientQuery('ALTER SEQUENCE recluse.commandIdSeq OWNED BY recluse.command.id')
   })
 }
