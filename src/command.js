@@ -8,6 +8,9 @@ module.exports = {
   readUnhandledCommandsContinuously,
 }
 
+/**
+ * Execute a list of commands.
+ */
 async function executeCommands (context, logger, pool, serialization, source, commands) {
   return inPoolTransaction(context, logger, pool, async client => {
     const {serialize} = serialization
@@ -25,6 +28,9 @@ async function executeCommands (context, logger, pool, serialization, source, co
   })
 }
 
+/**
+ * Reads commands and feeds the rows one-by-one into a consumer function.
+ */
 async function readCommands (context, logger, pool, serialization, id, fn) {
   return consumeQuery(
     context,
@@ -36,6 +42,10 @@ async function readCommands (context, logger, pool, serialization, id, fn) {
   )
 }
 
+/**
+ * Reads unhandled commands continuously  and feeds the rows one-by-one into a
+ * consumer function.
+ */
 function readUnhandledCommandsContinuously (context, logger, pool, serialization, options, fn) {
   const {timeout} = options
 

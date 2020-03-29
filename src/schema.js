@@ -4,6 +4,9 @@ module.exports = {
   initializeSchema,
 }
 
+/**
+ * Initialize the Recluse schema.
+ */
 async function initializeSchema (context, logger, pool) {
   return inPoolTransaction(context, logger, pool, async client => {
     await client.query('CREATE SCHEMA IF NOT EXISTS recluse')

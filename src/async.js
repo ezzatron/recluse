@@ -25,6 +25,9 @@ module.exports = {
 
 const CONTEXT = Symbol('CONTEXT')
 
+/**
+ * Throws an exception if the supplied context is "done".
+ */
 function assertRunning (context) {
   if (!(context && context[CONTEXT])) throw new Error('Invalid context supplied')
 
@@ -54,18 +57,25 @@ function createContext (logger, options = {}) {
     {
       [CONTEXT]: true,
 
+      /**
+       * A promise that rejects when the context becomes "done".
+       */
       get done () {
         if (!done) done = new Promise((resolve, reject) => { doneReject = reject })
 
         return done
       },
 
+      /**
+       * The "done" error, or undefined if the context is still running.
+       */
       get doneError () {
         return doneError
       },
 
       /**
-       * Register a function to be executed when this context transitions to "done".
+       * Register a function to be executed when this context transitions to
+       * "done".
        */
       onceDone (doneHandler) {
         const wrapper = [doneHandler]
@@ -178,18 +188,53 @@ async function doTerminable (context, fn, abort) {
   }
 }
 
+/**
+ * Returns a boolean indicating whether the supplied error is a "canceled"
+ * error.
+ */
 function isCanceled (error) {
   return error instanceof Canceled
 }
 
+/**
+ * Returns a boolean indicating whether the supplied error is a "canceled" or
+ * "timed out" error.
+ */
 function isDone (error) {
   return error instanceof Done
 }
 
+/**
+ * Returns a boolean indicating whether the supplied error is a "timed out"
+ * error.
+ */
 function isTimedOut (error) {
   return error instanceof TimedOut
 }
 
+/**
+ * Runs an async function and manages deferred logic.
+ *
+ * The supplied function will be called with a "defer" callback. This callback
+ * can be used to register async "cleanup" callbacks to run once the main
+ * function has completed.
+ *
+ * The cleanup callbacks are executed in reverse order of registration. Each
+ * cleanup callback will be called with a sync "recover" callback. Calling this
+ * callback will return any error thrown by either the main function, or one of
+ * the previously executed cleanup callbacks.
+ *
+ * Calling the recover callback also causes the error to be considered
+ * "handled", and hence should be re-thrown by the caller of the recover
+ * callback if the error should continue to propagate.
+ *
+ * Cleanup callbacks will continue to be executed even if a previous error was
+ * not handled. If an error is never handled by calling the recover callback, it
+ * will be thrown at the end of execution.
+ *
+ * Errors thrown from cleanup callbacks will take precedence over any previous
+ * unhandled errors. That is, only the "last" error will be thrown.
+ */
 async function withDefer (fn) {
   const deferreds = []
   let isDone = false
