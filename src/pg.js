@@ -7,8 +7,10 @@ module.exports = {
   configure,
   consumeContinuousQuery,
   consumeQuery,
+  inPoolTransaction,
   inTransaction,
   withAdvisoryLock,
+  withClient,
 }
 
 /**
@@ -105,7 +107,33 @@ async function consumeQuery (context, logger, pool, text, options, fn) {
 }
 
 /**
- * Executes a function while maintaining a transaction.
+ * Executes a function while maintaining a transaction, using a client acquired
+ * from the supplied pool.
+ *
+ * The transaction will either be committed when the call resolves, or rolled
+ * back when the call rejects.
+ *
+ * The client will be released once the transaction is complete.
+ */
+async function inPoolTransaction (context, logger, pool, fn) {
+  return withClient(
+    context,
+    logger,
+    pool,
+    async client => {
+      return inTransaction(
+        context,
+        logger,
+        client,
+        () => fn(client),
+      )
+    },
+  )
+}
+
+/**
+ * Executes a function while maintaining a transaction, using the supplied
+ * client.
  *
  * The transaction will either be committed when the call resolves, or rolled
  * back when the call rejects.
@@ -144,6 +172,9 @@ async function withAdvisoryLock (context, logger, pool, namespace, id, fn) {
   })
 }
 
+/**
+ * Executes a function while managing a client acquired from the pool.
+ */
 async function withClient (context, logger, pool, fn) {
   return withDefer(async defer => {
     const client = await acquireClient(context, logger, pool)
