@@ -3,6 +3,8 @@ const Cursor = require('pg-cursor')
 
 const {assertRunning, createContext, doInterminable, isTimedOut, withDefer} = require('./async.js')
 
+const UNIQUE_VIOLATION = '23505'
+
 module.exports = {
   configure,
   consumeContinuousQuery,
@@ -12,6 +14,8 @@ module.exports = {
   query,
   withAdvisoryLock,
   withClient,
+
+  UNIQUE_VIOLATION,
 }
 
 /**
