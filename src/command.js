@@ -47,7 +47,7 @@ async function readCommands (context, logger, pool, serialization, id, fn) {
  * Reads unhandled commands continuously  and feeds the rows one-by-one into a
  * consumer function.
  */
-function readUnhandledCommandsContinuously (context, logger, pool, serialization, options, fn) {
+async function readUnhandledCommandsContinuously (context, logger, pool, serialization, options, fn) {
   const {timeout} = options
 
   return consumeContinuousQuery(

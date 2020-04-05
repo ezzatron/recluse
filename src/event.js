@@ -1,11 +1,12 @@
 const {EVENT: CHANNEL} = require('./channel.js')
 const {createLazyGetter} = require('./object.js')
-const {consumeQuery, query, UNIQUE_VIOLATION} = require('./pg.js')
+const {consumeContinuousQuery, consumeQuery, query, UNIQUE_VIOLATION} = require('./pg.js')
 
 module.exports = {
   appendEvents,
   readEvents,
   readEventsByStream,
+  readEventsContinuously,
 }
 
 async function appendEvents (context, logger, client, serialization, type, instance, start, events) {
@@ -80,6 +81,21 @@ async function readEventsByStream (context, logger, pool, serialization, type, i
     pool,
     text,
     {values},
+    async row => fn(marshal(serialization, row)),
+  )
+}
+
+async function readEventsContinuously (context, logger, pool, serialization, options, fn) {
+  const {start, timeout} = options
+
+  return consumeContinuousQuery(
+    context,
+    logger,
+    pool,
+    CHANNEL,
+    ({globalOffset}) => globalOffset + 1,
+    'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
+    {start, timeout},
     async row => fn(marshal(serialization, row)),
   )
 }
