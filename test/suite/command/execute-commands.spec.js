@@ -16,7 +16,7 @@ describe('executeCommands()', () => {
   const commandC = {type: commandTypeA, data: 'c'}
   const commandD = {type: commandTypeB, data: 'd'}
 
-  let cancel, context, logger, restore
+  let cancel, client, context, logger, restore
 
   const pgHelper = createTestHelper({
     async beforeEach () {
@@ -29,9 +29,12 @@ describe('executeCommands()', () => {
       restore = configure()
       pgHelper.trackSchemas('recluse')
       await initializeSchema(context, logger, pgHelper.pool)
+
+      client = await pgHelper.pool.connect()
     },
 
     async afterEach () {
+      client.release(true)
       restore()
       await cancel()
     },
@@ -39,12 +42,10 @@ describe('executeCommands()', () => {
 
   describe('with no commands', () => {
     it('should be able to record commands', async () => {
-      await pgHelper.inTransaction(
-        client => executeCommands(context, logger, client, serialization, sourceA, [commandA, commandB]),
-      )
+      await executeCommands(context, logger, client, serialization, sourceA, [commandA, commandB])
 
       const commands = []
-      await readCommands(context, logger, pgHelper.pool, serialization, 0, ({command}) => {
+      await readCommands(context, logger, client, serialization, 0, ({command}) => {
         commands.push(command)
 
         return true
@@ -55,12 +56,10 @@ describe('executeCommands()', () => {
 
     it('should be able to record commands with null data', async () => {
       const command = {type: commandTypeA, data: null}
-      await pgHelper.inTransaction(
-        client => executeCommands(context, logger, client, serialization, sourceA, [command]),
-      )
+      await executeCommands(context, logger, client, serialization, sourceA, [command])
 
       const commands = []
-      await readCommands(context, logger, pgHelper.pool, serialization, 0, ({command}) => {
+      await readCommands(context, logger, client, serialization, 0, ({command}) => {
         commands.push(command)
 
         return true
@@ -71,12 +70,10 @@ describe('executeCommands()', () => {
 
     it('should be able to record commands with undefined data', async () => {
       const command = {type: commandTypeA}
-      await pgHelper.inTransaction(
-        client => executeCommands(context, logger, client, serialization, sourceA, [command]),
-      )
+      await executeCommands(context, logger, client, serialization, sourceA, [command])
 
       const commands = []
-      await readCommands(context, logger, pgHelper.pool, serialization, 0, ({command}) => {
+      await readCommands(context, logger, client, serialization, 0, ({command}) => {
         commands.push(command)
 
         return true
@@ -88,18 +85,14 @@ describe('executeCommands()', () => {
 
   describe('with existing commands', () => {
     beforeEach(async () => {
-      await pgHelper.inTransaction(async client => {
-        await executeCommands(context, logger, client, serialization, sourceA, [commandA, commandB])
-      })
+      await executeCommands(context, logger, client, serialization, sourceA, [commandA, commandB])
     })
 
     it('should be able to record commands', async () => {
-      await pgHelper.inTransaction(
-        client => executeCommands(context, logger, client, serialization, sourceA, [commandC, commandD]),
-      )
+      await executeCommands(context, logger, client, serialization, sourceA, [commandC, commandD])
 
       const commands = []
-      await readCommands(context, logger, pgHelper.pool, serialization, 2, ({command}) => {
+      await readCommands(context, logger, client, serialization, 2, ({command}) => {
         commands.push(command)
 
         return true
@@ -118,7 +111,7 @@ describe('executeCommands()', () => {
     })
 
     afterEach(() => {
-      listenClient.release()
+      listenClient.release(true)
     })
 
     it('should notify listening clients when recording commands', async () => {
@@ -128,7 +121,7 @@ describe('executeCommands()', () => {
 
       const task = Promise.all([
         notified,
-        pgHelper.inTransaction(client => executeCommands(context, logger, client, serialization, sourceA, [commandA])),
+        executeCommands(context, logger, client, serialization, sourceA, [commandA]),
       ])
 
       await expect(task).resolves.toEqual([CHANNEL, undefined])

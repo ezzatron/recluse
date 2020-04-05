@@ -31,7 +31,7 @@ async function appendEvents (context, logger, client, serialization, type, insta
   return true
 }
 
-async function readEvents (context, logger, pool, serialization, start, end, fn) {
+async function readEvents (context, logger, client, serialization, start, end, fn) {
   let text, values
 
   if (isFinite(end)) {
@@ -45,14 +45,14 @@ async function readEvents (context, logger, pool, serialization, start, end, fn)
   return consumeQuery(
     context,
     logger,
-    pool,
+    client,
     text,
     {values},
     async row => fn(marshal(serialization, row)),
   )
 }
 
-async function readEventsByStream (context, logger, pool, serialization, type, instance, start, end, fn) {
+async function readEventsByStream (context, logger, client, serialization, type, instance, start, end, fn) {
   if (typeof type !== 'string') throw new Error('Invalid stream type')
   if (typeof instance !== 'string') throw new Error('Invalid stream instance')
 
@@ -79,7 +79,7 @@ async function readEventsByStream (context, logger, pool, serialization, type, i
   return consumeQuery(
     context,
     logger,
-    pool,
+    client,
     text,
     {values},
     async row => fn(marshal(serialization, row)),

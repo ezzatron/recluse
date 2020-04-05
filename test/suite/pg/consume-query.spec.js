@@ -4,7 +4,7 @@ const {createLogger} = require('../../helper/logging.js')
 const {createTestHelper} = require('../../helper/pg.js')
 
 describe('consumeQuery()', () => {
-  let cancel, context, logger
+  let cancel, client, context, logger
 
   const pgHelper = createTestHelper({
     async beforeEach () {
@@ -22,9 +22,12 @@ describe('consumeQuery()', () => {
       const created = createContext(logger)
       context = created[0]
       cancel = created[1]
+
+      client = await pgHelper.pool.connect()
     },
 
     async afterEach () {
+      client.release(true)
       await cancel()
     },
   })
@@ -32,7 +35,7 @@ describe('consumeQuery()', () => {
   it('should be able to completely consume a query', async () => {
     const rows = []
 
-    const wasConsumed = await consumeQuery(context, logger, pgHelper.pool, 'SELECT * FROM test.entries', {}, async row => {
+    const wasConsumed = await consumeQuery(context, logger, client, 'SELECT * FROM test.entries', {}, async row => {
       rows.push(row)
 
       return true
@@ -49,7 +52,7 @@ describe('consumeQuery()', () => {
   it('should be able to partially consume a query', async () => {
     const rows = []
 
-    const wasConsumed = await consumeQuery(context, logger, pgHelper.pool, 'SELECT * FROM test.entries', {}, async row => {
+    const wasConsumed = await consumeQuery(context, logger, client, 'SELECT * FROM test.entries', {}, async row => {
       rows.push(row)
 
       return row.entry < 1
@@ -63,7 +66,7 @@ describe('consumeQuery()', () => {
   })
 
   it('should throw errors for invalid queries', async () => {
-    const task = consumeQuery(context, logger, pgHelper.pool, 'SELECT * FROM nonexistent', {}, () => false)
+    const task = consumeQuery(context, logger, client, 'SELECT * FROM nonexistent', {}, () => false)
 
     await expect(task).rejects.toThrow('relation "nonexistent" does not exist')
   })

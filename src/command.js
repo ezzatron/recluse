@@ -32,11 +32,11 @@ async function executeCommands (context, logger, client, serialization, source, 
 /**
  * Reads commands and feeds the rows one-by-one into a consumer function.
  */
-async function readCommands (context, logger, pool, serialization, id, fn) {
+async function readCommands (context, logger, client, serialization, id, fn) {
   return consumeQuery(
     context,
     logger,
-    pool,
+    client,
     'SELECT * FROM recluse.command WHERE id >= $1 ORDER BY id',
     {values: [id]},
     async row => fn(marshal(serialization, row)),

@@ -11,7 +11,7 @@ describe('readNextStreamOffset()', () => {
   const instance = 'stream-instance-a'
   const event = {type: 'event-type-a', data: 'a'}
 
-  let cancel, context, logger, restore
+  let cancel, client, context, logger, restore
 
   const pgHelper = createTestHelper({
     async beforeEach () {
@@ -24,9 +24,12 @@ describe('readNextStreamOffset()', () => {
       restore = configure()
       pgHelper.trackSchemas('recluse')
       await initializeSchema(context, logger, pgHelper.pool)
+
+      client = await pgHelper.pool.connect()
     },
 
     async afterEach () {
+      client.release(true)
       restore()
       await cancel()
     },
@@ -34,16 +37,16 @@ describe('readNextStreamOffset()', () => {
 
   describe('with an empty stream', () => {
     it('should return offset 0', async () => {
-      expect(await readNextStreamOffset(context, logger, pgHelper.pool, type, instance)).toBe(0)
+      expect(await readNextStreamOffset(context, logger, client, type, instance)).toBe(0)
     })
 
     it('should require a valid stream type', async () => {
-      await expect(readNextStreamOffset(context, logger, pgHelper.pool, null, instance))
+      await expect(readNextStreamOffset(context, logger, client, null, instance))
         .rejects.toThrow('Invalid stream type')
     })
 
     it('should require a valid stream instance', async () => {
-      await expect(readNextStreamOffset(context, logger, pgHelper.pool, type, null))
+      await expect(readNextStreamOffset(context, logger, client, type, null))
         .rejects.toThrow('Invalid stream instance')
     })
   })
@@ -56,7 +59,7 @@ describe('readNextStreamOffset()', () => {
     })
 
     it('should return a positive offset', async () => {
-      expect(await readNextStreamOffset(context, logger, pgHelper.pool, type, instance)).toBe(2)
+      expect(await readNextStreamOffset(context, logger, client, type, instance)).toBe(2)
     })
   })
 })

@@ -18,7 +18,7 @@ describe('appendEvents()', () => {
   const eventC = {type: eventTypeA, data: 'c'}
   const eventD = {type: eventTypeB, data: 'd'}
 
-  let cancel, context, logger, restore
+  let cancel, client, context, logger, restore
 
   const pgHelper = createTestHelper({
     async beforeEach () {
@@ -31,9 +31,12 @@ describe('appendEvents()', () => {
       restore = configure()
       pgHelper.trackSchemas('recluse')
       await initializeSchema(context, logger, pgHelper.pool)
+
+      client = await pgHelper.pool.connect()
     },
 
     async afterEach () {
+      client.release(true)
       restore()
       await cancel()
     },
@@ -41,26 +44,15 @@ describe('appendEvents()', () => {
 
   describe('with a new stream', () => {
     it('should be able to append to the stream', async () => {
-      const wasAppended = await pgHelper.inTransaction(
-        client => appendEvents(context, logger, client, serialization, typeA, instanceA, 0, [eventA, eventB]),
-      )
+      const wasAppended =
+        await appendEvents(context, logger, client, serialization, typeA, instanceA, 0, [eventA, eventB])
 
       const events = []
-      await readEventsByStream(
-        context,
-        logger,
-        pgHelper.pool,
-        serialization,
-        typeA,
-        instanceA,
-        0,
-        Infinity,
-        ({event}) => {
-          events.push(event)
+      await readEventsByStream(context, logger, client, serialization, typeA, instanceA, 0, Infinity, ({event}) => {
+        events.push(event)
 
-          return true
-        },
-      )
+        return true
+      })
 
       expect(wasAppended).toBe(true)
       expect(events).toEqual([eventA, eventB])
@@ -68,26 +60,14 @@ describe('appendEvents()', () => {
 
     it('should be able to append events with null data', async () => {
       const event = {type: eventTypeA, data: null}
-      const wasAppended = await pgHelper.inTransaction(
-        client => appendEvents(context, logger, client, serialization, typeA, instanceA, 0, [event]),
-      )
+      const wasAppended = await appendEvents(context, logger, client, serialization, typeA, instanceA, 0, [event])
 
       const events = []
-      await readEventsByStream(
-        context,
-        logger,
-        pgHelper.pool,
-        serialization,
-        typeA,
-        instanceA,
-        0,
-        Infinity,
-        ({event}) => {
-          events.push(event)
+      await readEventsByStream(context, logger, client, serialization, typeA, instanceA, 0, Infinity, ({event}) => {
+        events.push(event)
 
-          return true
-        },
-      )
+        return true
+      })
 
       expect(wasAppended).toBe(true)
       expect(events).toEqual([event])
@@ -95,26 +75,14 @@ describe('appendEvents()', () => {
 
     it('should be able to append events with undefined data', async () => {
       const event = {type: eventTypeA}
-      const wasAppended = await pgHelper.inTransaction(
-        client => appendEvents(context, logger, client, serialization, typeA, instanceA, 0, [event]),
-      )
+      const wasAppended = await appendEvents(context, logger, client, serialization, typeA, instanceA, 0, [event])
 
       const events = []
-      await readEventsByStream(
-        context,
-        logger,
-        pgHelper.pool,
-        serialization,
-        typeA,
-        instanceA,
-        0,
-        Infinity,
-        ({event}) => {
-          events.push(event)
+      await readEventsByStream(context, logger, client, serialization, typeA, instanceA, 0, Infinity, ({event}) => {
+        events.push(event)
 
-          return true
-        },
-      )
+        return true
+      })
 
       expect(wasAppended).toBe(true)
       expect(events).toEqual([event])
@@ -129,78 +97,45 @@ describe('appendEvents()', () => {
     })
 
     it('should be able to append to the stream', async () => {
-      const wasAppended = await pgHelper.inTransaction(
-        client => appendEvents(context, logger, client, serialization, typeA, instanceA, 2, [eventC, eventD]),
-      )
+      const wasAppended =
+        await appendEvents(context, logger, client, serialization, typeA, instanceA, 2, [eventC, eventD])
 
       const events = []
-      await readEventsByStream(
-        context,
-        logger,
-        pgHelper.pool,
-        serialization,
-        typeA,
-        instanceA,
-        0,
-        Infinity,
-        ({event}) => {
-          events.push(event)
+      await readEventsByStream(context, logger, client, serialization, typeA, instanceA, 0, Infinity, ({event}) => {
+        events.push(event)
 
-          return true
-        },
-      )
+        return true
+      })
 
       expect(wasAppended).toBe(true)
       expect(events).toEqual([eventA, eventB, eventC, eventD])
     })
 
     it('should fail if the specified offset is less than the next stream offset', async () => {
-      const wasAppended = await pgHelper.inTransaction(
-        client => appendEvents(context, logger, client, serialization, typeA, instanceA, 1, [eventC, eventD]),
-      )
+      const wasAppended =
+        await appendEvents(context, logger, client, serialization, typeA, instanceA, 1, [eventC, eventD])
 
       const events = []
-      await readEventsByStream(
-        context,
-        logger,
-        pgHelper.pool,
-        serialization,
-        typeA,
-        instanceA,
-        0,
-        Infinity,
-        ({event}) => {
-          events.push(event)
+      await readEventsByStream(context, logger, client, serialization, typeA, instanceA, 0, Infinity, ({event}) => {
+        events.push(event)
 
-          return true
-        },
-      )
+        return true
+      })
 
       expect(wasAppended).toBe(false)
       expect(events).toEqual([eventA, eventB])
     })
 
     it('should fail if the specified offset is greater than the next stream offset', async () => {
-      const wasAppended = await pgHelper.inTransaction(
-        client => appendEvents(context, logger, client, serialization, typeA, instanceA, 3, [eventC, eventD]),
-      )
+      const wasAppended =
+        await appendEvents(context, logger, client, serialization, typeA, instanceA, 3, [eventC, eventD])
 
       const events = []
-      await readEventsByStream(
-        context,
-        logger,
-        pgHelper.pool,
-        serialization,
-        typeA,
-        instanceA,
-        0,
-        Infinity,
-        ({event}) => {
-          events.push(event)
+      await readEventsByStream(context, logger, client, serialization, typeA, instanceA, 0, Infinity, ({event}) => {
+        events.push(event)
 
-          return true
-        },
-      )
+        return true
+      })
 
       expect(wasAppended).toBe(false)
       expect(events).toEqual([eventA, eventB])
@@ -219,7 +154,7 @@ describe('appendEvents()', () => {
 
     it('should record the global offset', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 0, Infinity, wrapper => {
+      await readEvents(context, logger, client, serialization, 0, Infinity, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -243,8 +178,8 @@ describe('appendEvents()', () => {
     })
 
     afterEach(() => {
-      clientA.release()
-      clientB.release()
+      clientA.release(true)
+      clientB.release(true)
     })
 
     it('should not allow concurrent writes', async () => {
@@ -286,7 +221,7 @@ describe('appendEvents()', () => {
       const [resultB, resultA] = await Promise.all([appendB(), appendA()])
 
       const events = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 0, Infinity, ({event}) => {
+      await readEvents(context, logger, client, serialization, 0, Infinity, ({event}) => {
         events.push(event)
 
         return true
@@ -307,7 +242,7 @@ describe('appendEvents()', () => {
     })
 
     afterEach(() => {
-      listenClient.release()
+      listenClient.release(true)
     })
 
     it('should notify listening clients when appending events', async () => {

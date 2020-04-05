@@ -17,7 +17,7 @@ describe('readEvents()', () => {
   const eventC = {type: eventTypeA, data: 'c'}
   const eventD = {type: eventTypeB, data: 'd'}
 
-  let cancel, context, logger, restore
+  let cancel, client, context, logger, restore
 
   const pgHelper = createTestHelper({
     async beforeEach () {
@@ -30,9 +30,12 @@ describe('readEvents()', () => {
       restore = configure()
       pgHelper.trackSchemas('recluse')
       await initializeSchema(context, logger, pgHelper.pool)
+
+      client = await pgHelper.pool.connect()
     },
 
     async afterEach () {
+      client.release(true)
       restore()
       await cancel()
     },
@@ -41,7 +44,7 @@ describe('readEvents()', () => {
   describe('with no events', () => {
     it('should return an empty result for start offset 0 with no end offset', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 0, Infinity, wrapper => {
+      await readEvents(context, logger, client, serialization, 0, Infinity, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -52,7 +55,7 @@ describe('readEvents()', () => {
 
     it('should return an empty result for start offset 0 with a positive end offset', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 0, 111, wrapper => {
+      await readEvents(context, logger, client, serialization, 0, 111, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -63,7 +66,7 @@ describe('readEvents()', () => {
 
     it('should return an empty result for positive start offsets with no end offset', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 111, Infinity, wrapper => {
+      await readEvents(context, logger, client, serialization, 111, Infinity, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -74,7 +77,7 @@ describe('readEvents()', () => {
 
     it('should return an empty result for positive start and end offsets', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 111, 222, wrapper => {
+      await readEvents(context, logger, client, serialization, 111, 222, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -93,7 +96,7 @@ describe('readEvents()', () => {
 
     it('should return the correct events for start offset 0 with no end offset', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 0, Infinity, wrapper => {
+      await readEvents(context, logger, client, serialization, 0, Infinity, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -108,7 +111,7 @@ describe('readEvents()', () => {
 
     it('should return the correct events for start offset 0 with a positive end offset', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 0, 2, wrapper => {
+      await readEvents(context, logger, client, serialization, 0, 2, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -122,7 +125,7 @@ describe('readEvents()', () => {
 
     it('should return the correct events for positive start offsets that exist, with no end offset', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 1, Infinity, wrapper => {
+      await readEvents(context, logger, client, serialization, 1, Infinity, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -136,7 +139,7 @@ describe('readEvents()', () => {
 
     it('should return the correct events for positive start and end offsets that exist', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 1, 2, wrapper => {
+      await readEvents(context, logger, client, serialization, 1, 2, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -149,7 +152,7 @@ describe('readEvents()', () => {
 
     it('should return an empty result for positive start offsets that do not exist, with no end offset', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 111, Infinity, wrapper => {
+      await readEvents(context, logger, client, serialization, 111, Infinity, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -160,7 +163,7 @@ describe('readEvents()', () => {
 
     it('should return an empty result for positive start and end offsets that do not exist', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 111, 222, wrapper => {
+      await readEvents(context, logger, client, serialization, 111, 222, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -171,7 +174,7 @@ describe('readEvents()', () => {
 
     it('should support partially consuming events', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 0, Infinity, wrapper => {
+      await readEvents(context, logger, client, serialization, 0, Infinity, wrapper => {
         wrappers.push(wrapper)
 
         return false
@@ -193,7 +196,7 @@ describe('readEvents()', () => {
 
     it('should return events for all streams', async () => {
       const wrappers = []
-      await readEvents(context, logger, pgHelper.pool, serialization, 0, Infinity, wrapper => {
+      await readEvents(context, logger, client, serialization, 0, Infinity, wrapper => {
         wrappers.push(wrapper)
 
         return true

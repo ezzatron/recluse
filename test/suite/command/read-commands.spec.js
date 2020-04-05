@@ -13,7 +13,7 @@ describe('readCommands()', () => {
   const commandA = {type: commandTypeA, data: 'a'}
   const commandB = {type: commandTypeB, data: 'b'}
 
-  let cancel, context, logger, restore
+  let cancel, client, context, logger, restore
 
   const pgHelper = createTestHelper({
     async beforeEach () {
@@ -26,9 +26,12 @@ describe('readCommands()', () => {
       restore = configure()
       pgHelper.trackSchemas('recluse')
       await initializeSchema(context, logger, pgHelper.pool)
+
+      client = await pgHelper.pool.connect()
     },
 
     async afterEach () {
+      client.release(true)
       restore()
       await cancel()
     },
@@ -37,7 +40,7 @@ describe('readCommands()', () => {
   describe('with no commands', () => {
     it('should return an empty result for ID 0', async () => {
       const wrappers = []
-      await readCommands(context, logger, pgHelper.pool, serialization, 0, wrapper => {
+      await readCommands(context, logger, client, serialization, 0, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -48,7 +51,7 @@ describe('readCommands()', () => {
 
     it('should return an empty result for positive IDs', async () => {
       const wrappers = []
-      await readCommands(context, logger, pgHelper.pool, serialization, 111, wrapper => {
+      await readCommands(context, logger, client, serialization, 111, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -67,7 +70,7 @@ describe('readCommands()', () => {
 
     it('should return the correct commands for ID 0', async () => {
       const wrappers = []
-      await readCommands(context, logger, pgHelper.pool, serialization, 0, wrapper => {
+      await readCommands(context, logger, client, serialization, 0, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -81,7 +84,7 @@ describe('readCommands()', () => {
 
     it('should return the correct commands for positive IDs that exist', async () => {
       const wrappers = []
-      await readCommands(context, logger, pgHelper.pool, serialization, 1, wrapper => {
+      await readCommands(context, logger, client, serialization, 1, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -94,7 +97,7 @@ describe('readCommands()', () => {
 
     it('should return an empty result for positive IDs that do not exist', async () => {
       const wrappers = []
-      await readCommands(context, logger, pgHelper.pool, serialization, 111, wrapper => {
+      await readCommands(context, logger, client, serialization, 111, wrapper => {
         wrappers.push(wrapper)
 
         return true
@@ -105,7 +108,7 @@ describe('readCommands()', () => {
 
     it('should support partially consuming commands', async () => {
       const wrappers = []
-      await readCommands(context, logger, pgHelper.pool, serialization, 0, wrapper => {
+      await readCommands(context, logger, client, serialization, 0, wrapper => {
         wrappers.push(wrapper)
 
         return false

@@ -11,5 +11,5 @@ module.exports = {
   testMatch: [
     '**/test/suite/**/*.spec.js',
   ],
-  testTimeout: 1000,
+  testTimeout: 1500,
 }

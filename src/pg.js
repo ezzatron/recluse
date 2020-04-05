@@ -61,10 +61,12 @@ async function consumeContinuousQuery (context, logger, pool, channel, nextOffse
       assertRunning(context)
 
       const options = {values: [offset, ...values]}
-      shouldContinue = await consumeQuery(context, logger, pool, text, options, row => {
-        offset = nextOffset(row)
+      shouldContinue = await withClient(context, logger, pool, async client => {
+        return consumeQuery(context, logger, client, text, options, row => {
+          offset = nextOffset(row)
 
-        return fn(row)
+          return fn(row)
+        })
       })
 
       if (!shouldContinue) break
@@ -88,26 +90,24 @@ async function consumeContinuousQuery (context, logger, pool, channel, nextOffse
  *
  * Returns a boolean indicating whether the query was completely consumed.
  */
-async function consumeQuery (context, logger, pool, text, options, fn) {
+async function consumeQuery (context, logger, client, text, options, fn) {
   return withDefer(async defer => {
-    return withClient(context, logger, pool, async client => {
-      const {values = []} = options
+    const {values = []} = options
 
-      const cursor = await createCursor(context, logger, client, text, values)
-      defer(() => closeCursor(context, logger, cursor))
+    const cursor = await createCursor(context, logger, client, text, values)
+    defer(() => closeCursor(context, logger, cursor))
 
-      let shouldContinue = true
+    let shouldContinue = true
 
-      while (shouldContinue) {
-        const row = await readFromCursor(context, logger, cursor)
+    while (shouldContinue) {
+      const row = await readFromCursor(context, logger, cursor)
 
-        if (!row) return true
+      if (!row) return true
 
-        shouldContinue = await fn(row)
-      }
+      shouldContinue = await fn(row)
+    }
 
-      return false
-    })
+    return false
   })
 }
 
