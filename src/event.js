@@ -4,6 +4,7 @@ const {consumeContinuousQuery, consumeQuery, query, UNIQUE_VIOLATION} = require(
 
 module.exports = {
   appendEvents,
+  appendEventsUnchecked,
   readEvents,
   readEventsByStream,
   readEventsContinuously,
@@ -29,6 +30,19 @@ async function appendEvents (context, logger, client, serialization, type, insta
   await query(context, logger, client, `NOTIFY ${CHANNEL}`)
 
   return true
+}
+
+async function appendEventsUnchecked (context, logger, client, serialization, type, instance, events) {
+  const count = events.length
+
+  const [streamId, start] = await updateStreamOffsetUnchecked(context, logger, client, type, instance, count)
+  const offset = await updateGlobalOffset(context, logger, client, count)
+
+  for (let i = 0; i < count; ++i) {
+    await insertEvent(context, logger, client, serialization, offset + i, streamId, start + i, events[i])
+  }
+
+  await query(context, logger, client, `NOTIFY ${CHANNEL}`)
 }
 
 async function readEvents (context, logger, client, serialization, start, end, fn) {
@@ -161,6 +175,23 @@ async function updateStreamOffset (context, logger, client, type, instance, star
   )
 
   return result.rowCount > 0 ? [true, result.rows[0].id] : [false, null]
+}
+
+async function updateStreamOffsetUnchecked (context, logger, client, type, instance, count) {
+  const result = await query(
+    context,
+    logger,
+    client,
+    `
+    INSERT INTO recluse.stream AS s (type, instance, next) VALUES ($1, $2, $3)
+    ON CONFLICT (type, instance) DO UPDATE SET next = s.next + $3
+    RETURNING id, next
+    `,
+    [type, instance, count],
+  )
+  const {id, next} = result.rows[0]
+
+  return [id, next - count]
 }
 
 async function updateGlobalOffset (context, logger, client, count) {
