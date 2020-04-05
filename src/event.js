@@ -7,6 +7,7 @@ module.exports = {
   readEvents,
   readEventsByStream,
   readEventsContinuously,
+  readNextStreamOffset,
 }
 
 async function appendEvents (context, logger, client, serialization, type, instance, start, events) {
@@ -98,6 +99,23 @@ async function readEventsContinuously (context, logger, pool, serialization, opt
     {start, timeout},
     async row => fn(marshal(serialization, row)),
   )
+}
+
+async function readNextStreamOffset (context, logger, client, type, instance) {
+  if (typeof type !== 'string') throw new Error('Invalid stream type')
+  if (typeof instance !== 'string') throw new Error('Invalid stream instance')
+
+  const result = await query(
+    context,
+    logger,
+    client,
+    'SELECT next FROM recluse.stream WHERE type = $1 AND instance = $2',
+    [type, instance],
+  )
+
+  if (result.rowCount < 1) return 0
+
+  return parseInt(result.rows[0].next)
 }
 
 async function insertEvent (context, logger, client, serialization, offset, streamId, streamOffset, event) {
