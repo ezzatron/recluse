@@ -2,7 +2,8 @@ module.exports = {
   createStateController,
 }
 
-function createStateController (copy, read) {
+function createStateController (serialization, read) {
+  const {copy} = serialization
   let isReadFlag = false
   let isUpdatedFlag = false
   let state = null

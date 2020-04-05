@@ -1,4 +1,4 @@
-const {serialization: {copy}} = require('../../../src/serialization/json.js')
+const {serialization} = require('../../../src/serialization/json.js')
 const {createStateController} = require('../../../src/state.js')
 
 describe('createStateController()', () => {
@@ -14,7 +14,7 @@ describe('createStateController()', () => {
     init = {number: 0}
     read = jest.fn(async () => init)
 
-    controller = createStateController(copy, read)
+    controller = createStateController(serialization, read)
   })
 
   describe('when the state has not been read', () => {
