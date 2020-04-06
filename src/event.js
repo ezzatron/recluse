@@ -108,7 +108,7 @@ async function readEventsContinuously (context, logger, pool, serialization, opt
     logger,
     pool,
     CHANNEL,
-    ({globalOffset}) => globalOffset + 1,
+    ({globalOffset}) => parseInt(globalOffset) + 1,
     'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
     {start, timeout},
     async row => fn(marshal(serialization, row)),

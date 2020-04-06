@@ -177,8 +177,8 @@ async function query (context, logger, client, text, values) {
  * a unit of work.
  */
 async function withAdvisoryLock (context, logger, pool, namespace, id, fn) {
-  return withDefer(async defer => {
-    return withClient(context, logger, pool, async client => {
+  return withClient(context, logger, pool, async client => {
+    return withDefer(async defer => {
       defer(await acquireAdvisoryLock(context, logger, client, namespace, id))
 
       return fn()
@@ -315,8 +315,8 @@ function readFromCursorAsync (logger, cursor) {
 }
 
 async function withNotificationListener (context, logger, pool, channel, fn) {
-  return withDefer(async defer => {
-    return withClient(context, logger, pool, async client => {
+  return withClient(context, logger, pool, async client => {
+    return withDefer(async defer => {
       let notified, resolveNotified, rejectNotified
 
       await query(context, logger, client, `LISTEN ${channel}`)

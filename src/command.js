@@ -55,7 +55,7 @@ async function readUnhandledCommandsContinuously (context, logger, pool, seriali
     logger,
     pool,
     CHANNEL,
-    ({id}) => id + 1,
+    ({id}) => parseInt(id) + 1,
     'SELECT * FROM recluse.command WHERE handled_at IS NULL AND id >= $1 ORDER BY id',
     {timeout},
     async row => fn(marshal(serialization, row)),
