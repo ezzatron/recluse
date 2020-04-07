@@ -2,7 +2,7 @@ const {handleCommandWithAggregate} = require('./aggregate.js')
 const {readUnhandledCommandsContinuously} = require('./command.js')
 const {handleCommandWithIntegration} = require('./integration.js')
 const {COMMAND: LOCK_NAMESPACE} = require('./lock.js')
-const {inPoolTransaction, withAdvisoryLock} = require('./pg.js')
+const {inPoolTransaction, query, withAdvisoryLock} = require('./pg.js')
 
 module.exports = {
   createCommandHandler,
@@ -81,7 +81,10 @@ async function consumeCommand (context, logger, pool, handleCommand, wrapper) {
 async function commandHandled (context, logger, client, wrapper) {
   const {id} = wrapper
 
-  return client.query(
+  return query(
+    context,
+    logger,
+    client,
     'UPDATE recluse.command SET handled_at = now() WHERE id = $1',
     [id],
   )
