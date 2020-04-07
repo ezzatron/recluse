@@ -71,5 +71,30 @@ async function initializeSchema (context, logger, pool) {
       )
     `)
     await clientQuery('ALTER SEQUENCE recluse.command_id_seq OWNED BY recluse.command.id')
+
+    await clientQuery('CREATE SEQUENCE IF NOT EXISTS recluse.projection_id_seq AS bigint MINVALUE 0')
+    await clientQuery(`
+      CREATE TABLE IF NOT EXISTS recluse.projection
+      (
+        id bigint NOT NULL DEFAULT nextval('recluse.projection_id_seq'),
+        type text NOT NULL,
+        next bigint NOT NULL,
+
+        PRIMARY KEY (id),
+        UNIQUE (type)
+      )
+    `)
+    await clientQuery('ALTER SEQUENCE recluse.projection_id_seq OWNED BY recluse.projection.id')
+
+    await clientQuery(`
+      CREATE TABLE IF NOT EXISTS recluse.process
+      (
+        type text NOT NULL,
+        instance text NOT NULL,
+        state bytea DEFAULT NULL,
+
+        PRIMARY KEY (type, instance)
+      )
+    `)
   })
 }

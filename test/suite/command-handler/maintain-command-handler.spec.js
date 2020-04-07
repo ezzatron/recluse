@@ -2,7 +2,7 @@ const {createContext} = require('../../../src/async.js')
 const {createCommandHandler, maintainCommandHandler} = require('../../../src/command-handler.js')
 const {executeCommands} = require('../../../src/command.js')
 const {readEvents} = require('../../../src/event.js')
-const {configure, UNIQUE_VIOLATION} = require('../../../src/pg.js')
+const {configure, inTransaction, UNIQUE_VIOLATION} = require('../../../src/pg.js')
 const {initializeSchema} = require('../../../src/schema.js')
 const {serialization} = require('../../../src/serialization/json.js')
 const {createLogger} = require('../../helper/logging.js')
@@ -200,8 +200,8 @@ describe('maintainCommandHandler()', () => {
             timeout: 5,
           }),
           afterDelay(10, async () => {
-            await pgHelper.inTransaction(async client => {
-              await executeCommands(context, logger, client, serialization, sourceA, [commandC, commandD])
+            await inTransaction(context, logger, executeClient, async () => {
+              await executeCommands(context, logger, executeClient, serialization, sourceA, [commandC, commandD])
             })
           }),
         ])
