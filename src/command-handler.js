@@ -49,9 +49,11 @@ async function maintainCommandHandler (context, logger, pool, serialization, han
     await readUnhandledCommandsContinuously(context, logger, pool, serialization, {timeout}, async wrapper => {
       await consumeCommand(context, logger, pool, handleCommand, wrapper)
 
+      if (shouldContinue && !shouldContinue()) return false
+
       logger.debug('Awaiting command')
 
-      return shouldContinue ? shouldContinue() : true
+      return true
     })
   })
 }
@@ -59,13 +61,9 @@ async function maintainCommandHandler (context, logger, pool, serialization, han
 async function consumeCommand (context, logger, pool, handleCommand, wrapper) {
   const {command} = wrapper
   const {type} = command
-
   logger.debug(`Consuming ${type} command`)
 
-  return inPoolTransaction(context, logger, pool, async client => {
-    const {command} = wrapper
-    const {type} = command
-
+  await inPoolTransaction(context, logger, pool, async client => {
     logger.debug(`Handling ${type} command`)
     const isHandled = await handleCommand(context, client, command)
 
@@ -74,7 +72,7 @@ async function consumeCommand (context, logger, pool, handleCommand, wrapper) {
     logger.debug(`Recording ${type} command as handled`)
     await commandHandled(context, logger, client, wrapper)
 
-    logger.debug(`Consumed ${type} command`)
+    logger.info(`Consumed ${type} command`)
   })
 }
 
