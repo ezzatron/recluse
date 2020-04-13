@@ -3,22 +3,22 @@
 const uuidv4 = require('uuid')
 
 const {TRANSFER} = require('../../../test/fixture/app/bank/command.js')
-const {accountIdByName, die, executeCommands, runAsync, withClient} = require('./util.js')
+const {accountIdByName, die, executeCommands, runAsync, inTransaction} = require('./util.js')
 
-runAsync(withClient(async pgClient => {
+runAsync(inTransaction(async client => {
   const [,, fromAccountName, toAccountName, amountString] = process.argv
   const amount = parseInt(amountString)
 
   if (!fromAccountName || !toAccountName || !amount) die('Usage: transfer <from-account> <to-account> <cents>')
 
-  const fromAccountId = await accountIdByName(pgClient, fromAccountName)
+  const fromAccountId = await accountIdByName(client, fromAccountName)
 
   if (!fromAccountId) die(`Unknown account ${JSON.stringify(fromAccountName)}`)
 
-  const toAccountId = await accountIdByName(pgClient, toAccountName)
+  const toAccountId = await accountIdByName(client, toAccountName)
 
   if (!toAccountId) die(`Unknown account ${JSON.stringify(toAccountName)}`)
 
   const transactionId = uuidv4()
-  await executeCommands(pgClient, {type: TRANSFER, data: {amount, fromAccountId, toAccountId, transactionId}})
+  await executeCommands(client, {type: TRANSFER, data: {amount, fromAccountId, toAccountId, transactionId}})
 }))

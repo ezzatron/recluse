@@ -3,18 +3,18 @@
 const uuidv4 = require('uuid')
 
 const {DEPOSIT} = require('../../../test/fixture/app/bank/command.js')
-const {accountIdByName, die, executeCommands, runAsync, withClient} = require('./util.js')
+const {accountIdByName, die, executeCommands, runAsync, inTransaction} = require('./util.js')
 
-runAsync(withClient(async pgClient => {
+runAsync(inTransaction(async client => {
   const [,, accountName, amountString] = process.argv
   const amount = parseInt(amountString)
 
   if (!accountName || !amount) die('Usage: deposit <account> <cents>')
 
-  const accountId = await accountIdByName(pgClient, accountName)
+  const accountId = await accountIdByName(client, accountName)
 
   if (!accountId) die(`Unknown account ${JSON.stringify(accountName)}`)
 
   const transactionId = uuidv4()
-  await executeCommands(pgClient, {type: DEPOSIT, data: {accountId, amount, transactionId}})
+  await executeCommands(client, {type: DEPOSIT, data: {accountId, amount, transactionId}})
 }))

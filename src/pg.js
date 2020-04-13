@@ -1,4 +1,4 @@
-const {types: {builtins: {TIMESTAMP, TIMESTAMPTZ}, getTypeParser, setTypeParser}} = require('pg')
+const {Pool, types: {builtins: {TIMESTAMP, TIMESTAMPTZ}, getTypeParser, setTypeParser}} = require('pg')
 const Cursor = require('pg-cursor')
 
 const {assertRunning, createContext, doInterminable, isTimedOut, withDefer} = require('./async.js')
@@ -9,6 +9,7 @@ module.exports = {
   configure,
   consumeContinuousQuery,
   consumeQuery,
+  createPool,
   inPoolTransaction,
   inTransaction,
   query,
@@ -109,6 +110,10 @@ async function consumeQuery (context, logger, client, text, options, fn) {
 
     return false
   })
+}
+
+function createPool (config = {}) {
+  return new Pool(config)
 }
 
 /**

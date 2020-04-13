@@ -3,17 +3,17 @@
 const uuidv4 = require('uuid')
 
 const {OPEN_ACCOUNT} = require('../../../test/fixture/app/bank/command.js')
-const {accountIdByName, die, executeCommands, runAsync, withClient} = require('./util.js')
+const {accountIdByName, die, executeCommands, runAsync, inTransaction} = require('./util.js')
 
-runAsync(withClient(async pgClient => {
+runAsync(inTransaction(async client => {
   const [,, name] = process.argv
 
   if (!name) die('Usage: open-account <name>')
 
-  const existingAccountId = await accountIdByName(pgClient, name)
+  const existingAccountId = await accountIdByName(client, name)
 
   if (existingAccountId) die(`Account ${JSON.stringify(name)} already exists`)
 
   const accountId = uuidv4()
-  await executeCommands(pgClient, {type: OPEN_ACCOUNT, data: {accountId, name}})
+  await executeCommands(client, {type: OPEN_ACCOUNT, data: {accountId, name}})
 }))
