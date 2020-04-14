@@ -41,7 +41,7 @@ function createRun (spec) {
       context: parentContext,
       createLogger = createLoggerFactory(env),
       exit = process.exit,
-      pgConfig = {},
+      pgConfig: userPgConfig,
       serialization = jsonSerialization,
     } = options
 
@@ -50,6 +50,7 @@ function createRun (spec) {
 
     logger.info(`Running ${name}`)
 
+    const pgConfig = resolvePgConfig(spec, userPgConfig)
     const pool = createPool(pgConfig)
     await initializeSchema(context, logger, pool)
 
@@ -114,4 +115,22 @@ function createRun (spec) {
       exit(code)
     }
   }
+}
+
+function resolvePgConfig (spec, config = {}) {
+  const {
+    max = defaultPoolSize(spec),
+  } = config
+
+  return {
+    ...config,
+    max,
+  }
+}
+
+function defaultPoolSize (spec) {
+  const {processes, projections} = spec
+  const threadCount = 1 + Object.keys(processes).length + Object.keys(projections).length
+
+  return 10 + (threadCount * 4)
 }
