@@ -132,5 +132,5 @@ function defaultPoolSize (spec) {
   const {processes, projections} = spec
   const threadCount = 1 + Object.keys(processes).length + Object.keys(projections).length
 
-  return 10 + (threadCount * 4)
+  return 10 + threadCount
 }
