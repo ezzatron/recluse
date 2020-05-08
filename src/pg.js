@@ -53,33 +53,33 @@ function configure () {
  * consuming rows.
  */
 async function consumeContinuousQuery (context, logger, pool, channel, nextOffset, text, options, fn) {
-  return withNotificationListener(context, logger, pool, channel, async waitForNotification => {
-    const {start = 0, timeout = 100, values = []} = options
-    let shouldContinue = true
-    let offset = start
+  return withClient(context, logger, pool, async client => {
+    return withNotificationListener(context, logger, client, channel, async waitForNotification => {
+      const {start = 0, timeout = 100, values = []} = options
+      let shouldContinue = true
+      let offset = start
 
-    while (shouldContinue) {
-      assertRunning(context)
+      while (shouldContinue) {
+        assertRunning(context)
 
-      const options = {values: [offset, ...values]}
-      shouldContinue = await withClient(context, logger, pool, async client => {
-        return consumeQuery(context, logger, client, text, options, row => {
+        const options = {values: [offset, ...values]}
+        shouldContinue = await consumeQuery(context, logger, client, text, options, row => {
           offset = nextOffset(row)
 
           return fn(row)
         })
-      })
 
-      if (!shouldContinue) break
+        if (!shouldContinue) break
 
-      const [notificationContext] = createContext(logger, {context, timeout})
+        const [notificationContext] = createContext(logger, {context, timeout})
 
-      try {
-        await waitForNotification(notificationContext)
-      } catch (error) {
-        if (!isTimedOut(error)) throw error
+        try {
+          await waitForNotification(notificationContext)
+        } catch (error) {
+          if (!isTimedOut(error)) throw error
+        }
       }
-    }
+    })
   })
 }
 
@@ -319,62 +319,60 @@ function readFromCursorAsync (logger, cursor) {
   })
 }
 
-async function withNotificationListener (context, logger, pool, channel, fn) {
-  return withClient(context, logger, pool, async client => {
-    return withDefer(async defer => {
-      let notified, resolveNotified, rejectNotified
+async function withNotificationListener (context, logger, client, channel, fn) {
+  return withDefer(async defer => {
+    let notified, resolveNotified, rejectNotified
 
-      await query(context, logger, client, `LISTEN ${channel}`)
-      defer(async recover => {
-        const error = recover()
-        if (error) throw error
+    await query(context, logger, client, `LISTEN ${channel}`)
+    defer(async recover => {
+      const error = recover()
+      if (error) throw error
 
-        await query(context, logger, client, `UNLISTEN ${channel}`)
-      })
-
-      client.on('end', onEnd)
-      client.on('error', onEnd)
-      client.on('notification', onNotification)
-      defer(removeListeners)
-
-      function onEnd (error) {
-        removeListeners()
-        error = error || new Error('Client disconnected while waiting for notification')
-
-        if (rejectNotified) return rejectNotified(error)
-
-        throw error
-      }
-
-      function onNotification (notification) {
-        if (notification.channel === channel && resolveNotified) resolveNotified()
-      }
-
-      function removeListeners () {
-        client.removeListener('end', onEnd)
-        client.removeListener('error', onEnd)
-        client.removeListener('notification', onNotification)
-      }
-
-      async function wait (context) {
-        if (!notified) {
-          notified = doInterminable(
-            context,
-            () => {
-              return new Promise((resolve, reject) => {
-                resolveNotified = resolve
-                rejectNotified = reject
-              }).then(() => {
-                notified = null
-              })
-            },
-          )
-        }
-
-        return notified
-      }
-
-      return fn(wait)
+      await query(context, logger, client, `UNLISTEN ${channel}`)
     })
+
+    client.on('end', onEnd)
+    client.on('error', onEnd)
+    client.on('notification', onNotification)
+    defer(removeListeners)
+
+    function onEnd (error) {
+      removeListeners()
+      error = error || new Error('Client disconnected while waiting for notification')
+
+      if (rejectNotified) return rejectNotified(error)
+
+      throw error
+    }
+
+    function onNotification (notification) {
+      if (notification.channel === channel && resolveNotified) resolveNotified()
+    }
+
+    function removeListeners () {
+      client.removeListener('end', onEnd)
+      client.removeListener('error', onEnd)
+      client.removeListener('notification', onNotification)
+    }
+
+    async function wait (context) {
+      if (!notified) {
+        notified = doInterminable(
+          context,
+          () => {
+            return new Promise((resolve, reject) => {
+              resolveNotified = resolve
+              rejectNotified = reject
+            }).then(() => {
+              notified = null
+            })
+          },
+        )
+      }
+
+      return notified
+    }
+
+    return fn(wait)
   })
 }
