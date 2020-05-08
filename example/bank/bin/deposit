@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const uuidv4 = require('uuid')
+const {v4: uuidv4} = require('uuid')
 
 const {DEPOSIT} = require('../../../test/fixture/app/bank/command.js')
 const {accountIdByName, die, executeCommands, runAsync, inTransaction} = require('./util.js')
