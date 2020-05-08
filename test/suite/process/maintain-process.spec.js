@@ -237,7 +237,7 @@ describe('maintainProcess()', () => {
       await expect(task).rejects.toThrow(error)
     })
 
-    it.skip('should be able to process new events when relying solely on notifications', async () => {
+    it('should be able to process new events when relying solely on notifications', async () => {
       const process = {
         ...emptyProcess,
         eventTypes: [eventTypeA, eventTypeB],

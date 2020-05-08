@@ -123,7 +123,7 @@ describe('maintainProjection()', () => {
       await expect(task).rejects.toThrow(error)
     })
 
-    it.skip('should apply new events when relying solely on notifications', async () => {
+    it('should apply new events when relying solely on notifications', async () => {
       await Promise.all([
         maintainProjection(context, logger, pgHelper.pool, serialization, nameA, projection, {
           shouldContinue: shouldContinueTimes(4),

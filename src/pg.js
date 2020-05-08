@@ -61,6 +61,10 @@ async function consumeContinuousQuery (context, logger, client, channel, nextOff
     while (shouldContinue) {
       assertRunning(context)
 
+      const [notificationContext] = createContext(logger, {context, timeout})
+      const nextNotification = waitForNotification(notificationContext)
+      nextNotification.catch(() => {})
+
       const options = {values: [offset, ...values]}
       shouldContinue = await consumeQuery(context, logger, client, text, options, row => {
         offset = nextOffset(row)
@@ -70,10 +74,8 @@ async function consumeContinuousQuery (context, logger, client, channel, nextOff
 
       if (!shouldContinue) break
 
-      const [notificationContext] = createContext(logger, {context, timeout})
-
       try {
-        await waitForNotification(notificationContext)
+        await nextNotification
       } catch (error) {
         if (!isTimedOut(error)) throw error
       }
