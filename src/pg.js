@@ -179,13 +179,11 @@ async function query (context, logger, client, text, values) {
  * Uses an advisory lock for a particular namespace / ID combination to perform
  * a unit of work.
  */
-async function withAdvisoryLock (context, logger, pool, namespace, id, fn) {
-  return withClient(context, logger, pool, async client => {
-    return withDefer(async defer => {
-      defer(await acquireAdvisoryLock(context, logger, client, namespace, id))
+async function withAdvisoryLock (context, logger, client, namespace, id, fn) {
+  return withDefer(async defer => {
+    defer(await acquireAdvisoryLock(context, logger, client, namespace, id))
 
-      return fn()
-    })
+    return fn()
   })
 }
 

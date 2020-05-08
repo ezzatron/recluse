@@ -47,7 +47,7 @@ async function maintainCommandHandler (context, logger, pool, serialization, han
     logger.debug('Acquired client for command handling')
     logger.debug('Acquiring session lock for command handling')
 
-    await withAdvisoryLock(context, logger, pool, LOCK_NAMESPACE, 0, async () => {
+    await withAdvisoryLock(context, logger, client, LOCK_NAMESPACE, 0, async () => {
       logger.debug('Acquired session lock for command handling')
 
       await readUnhandledCommandsContinuously(context, logger, client, serialization, {timeout}, async wrapper => {

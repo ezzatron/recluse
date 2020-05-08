@@ -18,7 +18,7 @@ async function maintainProjection (context, logger, pool, serialization, name, p
 
     const id = await readProjectionId(context, logger, client, type)
 
-    await withAdvisoryLock(context, logger, pool, LOCK_NAMESPACE, id, async () => {
+    await withAdvisoryLock(context, logger, client, LOCK_NAMESPACE, id, async () => {
       logger.debug(`Acquired session lock for ${type} maintenance`)
 
       let start = await readProjectionNext(context, logger, client, id)
