@@ -2,7 +2,7 @@ const {handleCommandWithAggregate} = require('./aggregate.js')
 const {readUnhandledCommandsContinuously} = require('./command.js')
 const {handleCommandWithIntegration} = require('./integration.js')
 const {COMMAND: LOCK_NAMESPACE} = require('./lock.js')
-const {inPoolTransaction, query, withAdvisoryLock} = require('./pg.js')
+const {inPoolTransaction, query, withAdvisoryLock, withClient} = require('./pg.js')
 
 module.exports = {
   createCommandHandler,
@@ -41,19 +41,24 @@ function createCommandHandler (logger, serialization, aggregates, integrations) 
 async function maintainCommandHandler (context, logger, pool, serialization, handleCommand, options = {}) {
   const {shouldContinue, timeout} = options
 
-  logger.debug('Acquiring session lock for command handling')
+  logger.debug('Acquiring client for command handling')
 
-  await withAdvisoryLock(context, logger, pool, LOCK_NAMESPACE, 0, async () => {
-    logger.debug('Acquired session lock for command handling')
+  await withClient(context, logger, pool, async client => {
+    logger.debug('Acquired client for command handling')
+    logger.debug('Acquiring session lock for command handling')
 
-    await readUnhandledCommandsContinuously(context, logger, pool, serialization, {timeout}, async wrapper => {
-      await consumeCommand(context, logger, pool, handleCommand, wrapper)
+    await withAdvisoryLock(context, logger, pool, LOCK_NAMESPACE, 0, async () => {
+      logger.debug('Acquired session lock for command handling')
 
-      if (shouldContinue && !shouldContinue()) return false
+      await readUnhandledCommandsContinuously(context, logger, client, serialization, {timeout}, async wrapper => {
+        await consumeCommand(context, logger, pool, handleCommand, wrapper)
 
-      logger.debug('Awaiting command')
+        if (shouldContinue && !shouldContinue()) return false
 
-      return true
+        logger.debug('Awaiting command')
+
+        return true
+      })
     })
   })
 }

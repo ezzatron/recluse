@@ -4,7 +4,7 @@ const {createLogger} = require('../../helper/logging.js')
 const {createTestHelper} = require('../../helper/pg.js')
 
 describe('consumeContinuousQuery()', () => {
-  let cancel, context, logger
+  let cancel, client, context, logger
 
   const pgHelper = createTestHelper({
     async beforeEach () {
@@ -19,9 +19,12 @@ describe('consumeContinuousQuery()', () => {
       const created = createContext(logger)
       context = created[0]
       cancel = created[1]
+
+      client = await pgHelper.pool.connect()
     },
 
     async afterEach () {
+      client.release(true)
       await cancel()
     },
   })
@@ -35,7 +38,7 @@ describe('consumeContinuousQuery()', () => {
     const performQuery = consumeContinuousQuery(
       context,
       logger,
-      pgHelper.pool,
+      client,
       'test_channel',
       row => row.entry + 1,
       'SELECT * FROM test.entries WHERE entry = $1',
@@ -78,7 +81,7 @@ describe('consumeContinuousQuery()', () => {
     const performQuery = consumeContinuousQuery(
       context,
       logger,
-      pgHelper.pool,
+      client,
       'test_channel',
       row => row.entry + 1,
       'SELECT * FROM test.entries WHERE entry = $1',
@@ -115,7 +118,7 @@ describe('consumeContinuousQuery()', () => {
     const task = consumeContinuousQuery(
       context,
       logger,
-      pgHelper.pool,
+      client,
       'test_channel',
       () => 0,
       'SELECT * FROM nonexistent',

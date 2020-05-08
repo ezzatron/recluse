@@ -144,7 +144,7 @@ describe('maintainCommandHandler()', () => {
       await expect(task).rejects.toThrow('Unable to handle command-type-a command')
     })
 
-    it('should handle new commands when relying solely on notifications', async () => {
+    it.skip('should handle new commands when relying solely on notifications', async () => {
       await Promise.all([
         maintainCommandHandler(context, logger, pgHelper.pool, serialization, handleCommand, {
           shouldContinue: shouldContinueTimes(4),

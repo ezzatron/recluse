@@ -17,7 +17,7 @@ describe('readEventsContinuously()', () => {
   const eventC = {type: eventTypeA, data: 'c'}
   const eventD = {type: eventTypeB, data: 'd'}
 
-  let cancel, context, logger, restore
+  let cancel, client, context, logger, restore
 
   const pgHelper = createTestHelper({
     async beforeEach () {
@@ -30,9 +30,12 @@ describe('readEventsContinuously()', () => {
       restore = configure()
       pgHelper.trackSchemas('recluse')
       await initializeSchema(context, logger, pgHelper.pool)
+
+      client = await pgHelper.pool.connect()
     },
 
     async afterEach () {
+      client.release(true)
       restore()
       await cancel()
     },
@@ -47,7 +50,7 @@ describe('readEventsContinuously()', () => {
 
     it('should return the correct events for offset 0', async () => {
       const wrappers = []
-      await readEventsContinuously(context, logger, pgHelper.pool, serialization, {}, wrapper => {
+      await readEventsContinuously(context, logger, client, serialization, {}, wrapper => {
         wrappers.push(wrapper)
 
         return wrapper.globalOffset < 1
@@ -61,7 +64,7 @@ describe('readEventsContinuously()', () => {
 
     it('should return the correct events for positive offsets that exist', async () => {
       const wrappers = []
-      await readEventsContinuously(context, logger, pgHelper.pool, serialization, {start: 1}, wrapper => {
+      await readEventsContinuously(context, logger, client, serialization, {start: 1}, wrapper => {
         wrappers.push(wrapper)
 
         return false
@@ -83,7 +86,7 @@ describe('readEventsContinuously()', () => {
 
     it('should return events for all streams', async () => {
       const wrappers = []
-      await readEventsContinuously(context, logger, pgHelper.pool, serialization, {}, wrapper => {
+      await readEventsContinuously(context, logger, client, serialization, {}, wrapper => {
         wrappers.push(wrapper)
 
         return wrapper.globalOffset < 3

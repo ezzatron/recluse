@@ -52,34 +52,32 @@ function configure () {
  * The consumer function should return a boolean to indicate whether to continue
  * consuming rows.
  */
-async function consumeContinuousQuery (context, logger, pool, channel, nextOffset, text, options, fn) {
-  return withClient(context, logger, pool, async client => {
-    return withNotificationListener(context, logger, client, channel, async waitForNotification => {
-      const {start = 0, timeout = 100, values = []} = options
-      let shouldContinue = true
-      let offset = start
+async function consumeContinuousQuery (context, logger, client, channel, nextOffset, text, options, fn) {
+  return withNotificationListener(context, logger, client, channel, async waitForNotification => {
+    const {start = 0, timeout = 100, values = []} = options
+    let shouldContinue = true
+    let offset = start
 
-      while (shouldContinue) {
-        assertRunning(context)
+    while (shouldContinue) {
+      assertRunning(context)
 
-        const options = {values: [offset, ...values]}
-        shouldContinue = await consumeQuery(context, logger, client, text, options, row => {
-          offset = nextOffset(row)
+      const options = {values: [offset, ...values]}
+      shouldContinue = await consumeQuery(context, logger, client, text, options, row => {
+        offset = nextOffset(row)
 
-          return fn(row)
-        })
+        return fn(row)
+      })
 
-        if (!shouldContinue) break
+      if (!shouldContinue) break
 
-        const [notificationContext] = createContext(logger, {context, timeout})
+      const [notificationContext] = createContext(logger, {context, timeout})
 
-        try {
-          await waitForNotification(notificationContext)
-        } catch (error) {
-          if (!isTimedOut(error)) throw error
-        }
+      try {
+        await waitForNotification(notificationContext)
+      } catch (error) {
+        if (!isTimedOut(error)) throw error
       }
-    })
+    }
   })
 }
 

@@ -100,13 +100,13 @@ async function readEventsByStream (context, logger, client, serialization, type,
   )
 }
 
-async function readEventsContinuously (context, logger, pool, serialization, options, fn) {
+async function readEventsContinuously (context, logger, client, serialization, options, fn) {
   const {start, timeout} = options
 
   return consumeContinuousQuery(
     context,
     logger,
-    pool,
+    client,
     CHANNEL,
     ({global_offset: globalOffset}) => parseInt(globalOffset) + 1,
     'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',

@@ -1,6 +1,6 @@
 const {readEventsContinuously} = require('./event.js')
 const {PROJECTION: LOCK_NAMESPACE} = require('./lock.js')
-const {inPoolTransaction, query, withAdvisoryLock} = require('./pg.js')
+const {inPoolTransaction, query, withAdvisoryLock, withClient} = require('./pg.js')
 
 module.exports = {
   maintainProjection,
@@ -10,27 +10,28 @@ async function maintainProjection (context, logger, pool, serialization, name, p
   const {applyEvent} = projection
   const {shouldContinue, timeout, type = `projection.${name}`} = options
 
-  logger.debug(`Acquiring session lock for ${type} maintenance`)
+  logger.debug(`Acquiring client for ${type} maintenance`)
 
-  const id = await inPoolTransaction(context, logger, pool, async client => {
-    return readProjectionId(context, logger, client, type)
-  })
+  await withClient(context, logger, pool, async client => {
+    logger.debug(`Acquired client for ${type} maintenance`)
+    logger.debug(`Acquiring session lock for ${type} maintenance`)
 
-  await withAdvisoryLock(context, logger, pool, LOCK_NAMESPACE, id, async () => {
-    logger.debug(`Acquired session lock for ${type} maintenance`)
+    const id = await readProjectionId(context, logger, client, type)
 
-    let start = await inPoolTransaction(context, logger, pool, async client => {
-      return readProjectionNext(context, logger, client, id)
-    })
+    await withAdvisoryLock(context, logger, pool, LOCK_NAMESPACE, id, async () => {
+      logger.debug(`Acquired session lock for ${type} maintenance`)
 
-    await readEventsContinuously(context, logger, pool, serialization, {start, timeout}, async ({event}) => {
-      await consumeEvent(context, logger, pool, type, applyEvent, start++, event)
+      let start = await readProjectionNext(context, logger, client, id)
 
-      if (shouldContinue && !shouldContinue()) return false
+      await readEventsContinuously(context, logger, client, serialization, {start, timeout}, async ({event}) => {
+        await consumeEvent(context, logger, pool, type, applyEvent, start++, event)
 
-      logger.debug(`Awaiting event for ${type}`)
+        if (shouldContinue && !shouldContinue()) return false
 
-      return true
+        logger.debug(`Awaiting event for ${type}`)
+
+        return true
+      })
     })
   })
 }

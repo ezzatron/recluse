@@ -13,7 +13,7 @@ describe('readUnhandledCommandsContinuously()', () => {
   const commandA = {type: commandTypeA, data: 'a'}
   const commandB = {type: commandTypeB, data: 'b'}
 
-  let cancel, context, logger, restore
+  let cancel, client, context, logger, restore
 
   const pgHelper = createTestHelper({
     async beforeEach () {
@@ -26,9 +26,12 @@ describe('readUnhandledCommandsContinuously()', () => {
       restore = configure()
       pgHelper.trackSchemas('recluse')
       await initializeSchema(context, logger, pgHelper.pool)
+
+      client = await pgHelper.pool.connect()
     },
 
     async afterEach () {
+      client.release(true)
       restore()
       await cancel()
     },
@@ -43,7 +46,7 @@ describe('readUnhandledCommandsContinuously()', () => {
 
     it('should return all commands', async () => {
       const wrappers = []
-      await readUnhandledCommandsContinuously(context, logger, pgHelper.pool, serialization, {}, wrapper => {
+      await readUnhandledCommandsContinuously(context, logger, client, serialization, {}, wrapper => {
         wrappers.push(wrapper)
 
         return wrappers.length < 2
@@ -66,7 +69,7 @@ describe('readUnhandledCommandsContinuously()', () => {
 
     it('should return only the unhandled commands', async () => {
       const wrappers = []
-      await readUnhandledCommandsContinuously(context, logger, pgHelper.pool, serialization, {}, wrapper => {
+      await readUnhandledCommandsContinuously(context, logger, client, serialization, {}, wrapper => {
         wrappers.push(wrapper)
 
         return false

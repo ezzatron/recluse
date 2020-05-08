@@ -47,13 +47,13 @@ async function readCommands (context, logger, client, serialization, id, fn) {
  * Reads unhandled commands continuously  and feeds the rows one-by-one into a
  * consumer function.
  */
-async function readUnhandledCommandsContinuously (context, logger, pool, serialization, options, fn) {
+async function readUnhandledCommandsContinuously (context, logger, client, serialization, options, fn) {
   const {timeout} = options
 
   return consumeContinuousQuery(
     context,
     logger,
-    pool,
+    client,
     CHANNEL,
     ({id}) => parseInt(id) + 1,
     'SELECT * FROM recluse.command WHERE handled_at IS NULL AND id >= $1 ORDER BY id',
