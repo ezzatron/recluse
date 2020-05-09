@@ -119,11 +119,15 @@ function createRun (spec) {
 
 function resolvePgConfig (spec, config = {}) {
   const {
+    connectionTimeoutMillis = 1000,
+    idleTimeoutMillis = 0,
     max = defaultPoolSize(spec),
   } = config
 
   return {
     ...config,
+    connectionTimeoutMillis,
+    idleTimeoutMillis,
     max,
   }
 }
