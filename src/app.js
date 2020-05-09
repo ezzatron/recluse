@@ -59,9 +59,10 @@ function createRun (spec) {
     })
 
     const commandHandlerThreadType = 'command-handler'
-    const handleCommand = createCommandHandler(logger, serialization, aggregates, integrations)
+    const commandHandlerLogger = createLogger(commandHandlerThreadType)
+    const handleCommand = createCommandHandler(commandHandlerLogger, serialization, aggregates, integrations)
     const commandHandlerThread =
-      maintainCommandHandler(context, createLogger(commandHandlerThreadType), pool, serialization, handleCommand)
+      maintainCommandHandler(context, commandHandlerLogger, pool, serialization, handleCommand)
 
     const processThreads = []
 
