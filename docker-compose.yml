@@ -1,0 +1,16 @@
+version: '3'
+services:
+  example-bank:
+    build: .
+    environment:
+      PGHOST: example-bank-postgres
+      PGUSER: bank
+      PGPASSWORD: bank
+      PGDATABASE: bank
+  example-bank-postgres:
+    image: postgres:alpine
+    environment:
+      POSTGRES_USER: bank
+      POSTGRES_PASSWORD: bank
+      POSTGRES_DB: bank
+
