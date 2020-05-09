@@ -20,9 +20,9 @@ describe('withAdvisoryLock()', () => {
       client = await pgHelper.pool.connect()
     },
 
-    async afterEach () {
+    afterEach () {
       client && client.release(true)
-      await cancel()
+      cancel && cancel()
     },
   })
 

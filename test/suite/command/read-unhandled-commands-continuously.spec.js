@@ -30,10 +30,10 @@ describe('readUnhandledCommandsContinuously()', () => {
       client = await pgHelper.pool.connect()
     },
 
-    async afterEach () {
+    afterEach () {
       client && client.release(true)
-      restore()
-      await cancel()
+      restore && restore()
+      cancel && cancel()
     },
   })
 

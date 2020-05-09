@@ -73,9 +73,9 @@ describe('maintainProcess()', () => {
       }
     },
 
-    async afterEach () {
-      restore()
-      await cancel()
+    afterEach () {
+      restore && restore()
+      cancel && cancel()
     },
   })
 

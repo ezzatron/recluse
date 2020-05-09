@@ -86,7 +86,7 @@ describe('Async context', () => {
   })
 
   afterEach(() => {
-    cancel()
+    cancel && cancel()
   })
 
   describe('assertRunning()', () => {
