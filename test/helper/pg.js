@@ -1,9 +1,10 @@
+const {userInfo} = require('os')
 const {Client, Pool} = require('pg')
 
 module.exports = {
   createTestHelper,
 
-  TIME_PATTERN: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d+\+00$/,
+  TIME_PATTERN: /^\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d.\d+\+\d\d$/,
 }
 
 function createTestHelper (options = {}) {
@@ -16,7 +17,7 @@ function createTestHelper (options = {}) {
   const config = {
     host: PGHOST || 'localhost',
     port: parseInt(PGPORT || '5432'),
-    user: PGUSER || 'postgres',
+    user: PGUSER || userInfo().username,
     password: PGPASSWORD || '',
     database: `test_${Math.random().toString(36).substring(2, 15)}`,
   }
