@@ -1,0 +1,19 @@
+#!/usr/bin/env node
+
+const {v4: uuidv4} = require('uuid')
+
+const {OPEN_ACCOUNT} = require('../../../test/fixture/app/bank/command.js')
+const {accountIdByName, die, executeCommands, runAsync, inTransaction} = require('./util.js')
+
+runAsync(inTransaction(async client => {
+  const [,, name] = process.argv
+
+  if (!name) die('Usage: open-account <name>')
+
+  const existingAccountId = await accountIdByName(client, name)
+
+  if (existingAccountId) die(`Account ${JSON.stringify(name)} already exists`)
+
+  const accountId = uuidv4()
+  await executeCommands(client, {type: OPEN_ACCOUNT, data: {accountId, name}})
+}))

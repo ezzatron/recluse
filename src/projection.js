@@ -1,78 +1,67 @@
-const {acquireAsyncIterator} = require('./iterator.js')
-const {acquireSessionLock, inTransaction, releaseSessionLock} = require('./pg.js')
-const {allSerial} = require('./async.js')
-const {PROJECTION: LOCK_NAMESPACE} = require('./lock.js')
 const {readEventsContinuously} = require('./event.js')
+const {PROJECTION: LOCK_NAMESPACE} = require('./lock.js')
+const {inPoolTransaction, query, withAdvisoryLock, withClient} = require('./pg.js')
 
 module.exports = {
   maintainProjection,
 }
 
-function maintainProjection (serialization, pgPool, name, applyEvent, options = {}) {
-  const {timeout, type = `projection.${name}`, clock} = options
-  const iterator = createProjectionIterator(serialization, pgPool, type, applyEvent, timeout, clock)
+async function maintainProjection (context, logger, pool, serialization, name, projection, options = {}) {
+  const {applyEvent} = projection
+  const {shouldContinue, timeout, type = `projection.${name}`} = options
 
-  return {
-    [Symbol.asyncIterator]: () => iterator,
-    cancel: iterator.cancel,
-  }
-}
+  logger.debug(`Acquiring client for ${type} maintenance`)
 
-function createProjectionIterator (serialization, pgPool, type, applyEvent, timeout, clock) {
-  let id, start, iterator, pgClient
-  let isLocked = false
+  await withClient(context, logger, pool, async client => {
+    logger.debug(`Acquired client for ${type} maintenance`)
+    logger.debug(`Acquiring session lock for ${type} maintenance`)
 
-  return {
-    async next () {
-      if (!iterator) {
-        pgClient = await pgPool.connect()
+    const id = await readProjectionId(context, logger, client, type)
 
-        id = await readProjectionId(pgClient, type)
-        await acquireSessionLock(pgClient, LOCK_NAMESPACE, id)
-        isLocked = true
+    await withAdvisoryLock(context, logger, client, LOCK_NAMESPACE, id, async () => {
+      logger.debug(`Acquired session lock for ${type} maintenance`)
 
-        start = await readProjectionNext(pgClient, id)
-        iterator = acquireAsyncIterator(readEventsContinuously(serialization, pgClient, {start, timeout, clock}))
-      }
+      let start = await readProjectionNext(context, logger, client, id)
 
-      const {value: {event}} = await iterator.next()
-      const value = await apply(pgPool, type, applyEvent, start++, event)
+      await readEventsContinuously(context, logger, client, serialization, {start, timeout}, async ({event}) => {
+        await consumeEvent(context, logger, pool, type, applyEvent, start++, event)
 
-      return {done: false, value}
-    },
+        if (shouldContinue && !shouldContinue()) return false
 
-    async cancel () {
-      await allSerial(
-        async () => { if (iterator) await iterator.cancel() },
-        async () => { if (isLocked) await releaseSessionLock(pgClient, LOCK_NAMESPACE, id) },
-        () => { if (pgClient) pgClient.release() },
-      )
-    },
-  }
-}
+        logger.debug(`Awaiting event for ${type}`)
 
-async function apply (pgPool, type, applyEvent, offset, event) {
-  const pgClient = await pgPool.connect()
-
-  try {
-    return inTransaction(pgClient, async () => {
-      await incrementProjection(pgClient, type, offset)
-
-      return applyEvent(pgClient, event)
+        return true
+      })
     })
-  } finally {
-    pgClient.release()
-  }
+  })
 }
 
-async function readProjectionId (pgClient, type) {
-  const result = await pgClient.query(
+async function consumeEvent (context, logger, pool, type, applyEvent, offset, event) {
+  const {type: eventType} = event
+  logger.debug(`Consuming ${eventType} event with ${type}`)
+
+  await inPoolTransaction(context, logger, pool, async client => {
+    logger.debug(`Incrementing ${type} for ${eventType} event`)
+    await incrementProjection(context, logger, client, type, offset)
+
+    logger.debug(`Applying ${eventType} event to ${type}`)
+    await applyEvent({client, context, event, logger})
+
+    logger.info(`Consumed ${eventType} event with ${type}`)
+  })
+}
+
+async function readProjectionId (context, logger, client, type) {
+  const result = await query(
+    context,
+    logger,
+    client,
     `
     INSERT INTO recluse.projection (type, next) VALUES ($1, 0)
     ON CONFLICT (type) DO UPDATE SET type = $1
     RETURNING id
     `,
-    [type]
+    [type],
   )
 
   if (result.rowCount < 1) throw new Error('Unable to read projection ID')
@@ -80,10 +69,13 @@ async function readProjectionId (pgClient, type) {
   return parseInt(result.rows[0].id)
 }
 
-async function readProjectionNext (pgClient, id) {
-  const result = await pgClient.query(
+async function readProjectionNext (context, logger, client, id) {
+  const result = await query(
+    context,
+    logger,
+    client,
     'SELECT next FROM recluse.projection WHERE id = $1',
-    [id]
+    [id],
   )
 
   if (result.rowCount < 1) throw new Error('Unable to read next projection offset')
@@ -91,10 +83,13 @@ async function readProjectionNext (pgClient, id) {
   return parseInt(result.rows[0].next)
 }
 
-async function incrementProjection (pgClient, type, offset) {
-  const result = await pgClient.query(
+async function incrementProjection (context, logger, client, type, offset) {
+  const result = await query(
+    context,
+    logger,
+    client,
     'UPDATE recluse.projection SET next = $2 + 1 WHERE type = $1 AND next = $2',
-    [type, offset]
+    [type, offset],
   )
 
   if (result.rowCount !== 1) throw new Error('Unable to lock projection for updating')

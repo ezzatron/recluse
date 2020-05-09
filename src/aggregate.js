@@ -5,8 +5,7 @@ module.exports = {
   handleCommandWithAggregate,
 }
 
-async function handleCommandWithAggregate (serialization, pgClient, name, aggregate, command) {
-  const {copy} = serialization
+async function handleCommandWithAggregate (context, logger, client, serialization, name, aggregate, command) {
   const {applyEvent, createInitialState, eventTypes, handleCommand, routeCommand} = aggregate
   const {type} = command
   const instance = routeCommand(command)
@@ -14,10 +13,23 @@ async function handleCommandWithAggregate (serialization, pgClient, name, aggreg
   if (!instance) throw new Error(`Unable to handle ${type} command - no suitable route found`)
 
   const streamType = `aggregate.${name}`
-  const next = await readNextStreamOffset(pgClient, streamType, instance)
+  const next = await readNextStreamOffset(context, logger, client, streamType, instance)
+
   const {readState, updateState} = createStateController(
-    copy,
-    async () => readAggregateState(serialization, pgClient, streamType, instance, next, applyEvent, createInitialState)
+    serialization,
+    async () => {
+      return readAggregateState(
+        context,
+        logger,
+        client,
+        serialization,
+        streamType,
+        instance,
+        next,
+        applyEvent,
+        createInitialState,
+      )
+    },
   )
 
   const recordedEvents = []
@@ -33,28 +45,40 @@ async function handleCommandWithAggregate (serialization, pgClient, name, aggreg
     }
   }
 
+  logger.info(`Handling ${type} command with ${streamType}`)
   await handleCommand({command, readState, recordEvents})
 
-  return appendEvents(serialization, pgClient, streamType, instance, next, recordedEvents)
+  return appendEvents(context, logger, client, serialization, streamType, instance, next, recordedEvents)
 }
 
 async function readAggregateState (
+  context,
+  logger,
+  client,
   serialization,
-  pgClient,
   streamType,
   instance,
   next,
   applyEvent,
-  createInitialState
+  createInitialState,
 ) {
-  const {copy} = serialization
-  const events = readEventsByStream(serialization, pgClient, streamType, instance, 0, next)
-  const {getState, readState, updateState} = createStateController(copy, () => createInitialState())
+  const {getState, readState, updateState} = createStateController(serialization, () => createInitialState())
 
-  for await (const wrapper of events) {
-    const {event} = wrapper
-    await applyEvent({event, readState, updateState})
-  }
+  await readEventsByStream(
+    context,
+    logger,
+    client,
+    serialization,
+    streamType,
+    instance,
+    0,
+    Infinity,
+    async ({event}) => {
+      await applyEvent({event, readState, updateState})
+
+      return true
+    },
+  )
 
   return getState()
 }

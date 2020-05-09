@@ -1,7 +1,6 @@
-const {asyncQuery, continuousQuery, UNIQUE_VIOLATION} = require('./pg.js')
-const {createLazyGetter} = require('./object.js')
 const {EVENT: CHANNEL} = require('./channel.js')
-const {EVENT} = require('./handler.js')
+const {createLazyGetter} = require('./object.js')
+const {consumeContinuousQuery, consumeQuery, query, UNIQUE_VIOLATION} = require('./pg.js')
 
 module.exports = {
   appendEvents,
@@ -12,65 +11,66 @@ module.exports = {
   readNextStreamOffset,
 }
 
-async function appendEvents (serialization, pgClient, type, instance, start, events) {
-  const {serialize} = serialization
+async function appendEvents (context, logger, client, serialization, type, instance, start, events) {
   const count = events.length
   const next = start + count
 
   const [isUpdated, streamId] = start === 0
-    ? await insertStream(pgClient, type, instance, next)
-    : await updateStreamOffset(pgClient, type, instance, start, next)
+    ? await insertStream(context, logger, client, type, instance, next)
+    : await updateStreamOffset(context, logger, client, type, instance, start, next)
 
   if (!isUpdated) return false
 
-  const offset = await updateGlobalOffset(pgClient, count)
+  const offset = await updateGlobalOffset(context, logger, client, count)
 
   for (let i = 0; i < count; ++i) {
-    await insertEvent(serialize, pgClient, offset + i, streamId, start + i, events[i])
+    await insertEvent(context, logger, client, serialization, offset + i, streamId, start + i, events[i])
   }
 
-  await pgClient.query(`NOTIFY ${CHANNEL}`)
+  await query(context, logger, client, `NOTIFY ${CHANNEL}`)
 
   return true
 }
 
-async function appendEventsUnchecked (serialization, pgClient, type, instance, events) {
-  const {serialize} = serialization
+async function appendEventsUnchecked (context, logger, client, serialization, type, instance, events) {
   const count = events.length
 
-  const [streamId, start] = await updateStreamOffsetUnchecked(pgClient, type, instance, count)
-  const offset = await updateGlobalOffset(pgClient, count)
+  const [streamId, start] = await updateStreamOffsetUnchecked(context, logger, client, type, instance, count)
+  const offset = await updateGlobalOffset(context, logger, client, count)
 
   for (let i = 0; i < count; ++i) {
-    await insertEvent(serialize, pgClient, offset + i, streamId, start + i, events[i])
+    await insertEvent(context, logger, client, serialization, offset + i, streamId, start + i, events[i])
   }
 
-  await pgClient.query(`NOTIFY ${CHANNEL}`)
-
-  return true
+  await query(context, logger, client, `NOTIFY ${CHANNEL}`)
 }
 
-function readEvents (serialization, pgClient, start = 0, end = Infinity) {
-  const {unserialize} = serialization
-
-  let text, params
+async function readEvents (context, logger, client, serialization, start, end, fn) {
+  let text, values
 
   if (isFinite(end)) {
     text = 'SELECT * FROM recluse.event WHERE global_offset >= $1 AND global_offset < $2 ORDER BY global_offset'
-    params = [start, end]
+    values = [start, end]
   } else {
     text = 'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset'
-    params = [start]
+    values = [start]
   }
 
-  return pgClient.query(asyncQuery(text, params, marshal.bind(null, unserialize)))
+  return consumeQuery(
+    context,
+    logger,
+    client,
+    text,
+    {values},
+    async row => fn(marshal(serialization, row)),
+  )
 }
 
-function readEventsByStream (serialization, pgClient, type, instance, start = 0, end = Infinity) {
+async function readEventsByStream (context, logger, client, serialization, type, instance, start, end, fn) {
   if (typeof type !== 'string') throw new Error('Invalid stream type')
   if (typeof instance !== 'string') throw new Error('Invalid stream instance')
 
-  let text, params
+  let text, values
 
   if (isFinite(end)) {
     text = `
@@ -79,7 +79,7 @@ function readEventsByStream (serialization, pgClient, type, instance, start = 0,
       WHERE s.type = $1 AND s.instance = $2 AND e.stream_offset >= $3 AND e.stream_offset < $4
       ORDER BY e.stream_offset
       `
-    params = [type, instance, start, end]
+    values = [type, instance, start, end]
   } else {
     text = `
       SELECT e.* FROM recluse.event AS e
@@ -87,39 +87,44 @@ function readEventsByStream (serialization, pgClient, type, instance, start = 0,
       WHERE s.type = $1 AND s.instance = $2 AND e.stream_offset >= $3
       ORDER BY e.stream_offset
       `
-    params = [type, instance, start]
+    values = [type, instance, start]
   }
 
-  const {unserialize} = serialization
-
-  return pgClient.query(asyncQuery(text, params, marshal.bind(null, unserialize)))
-}
-
-function readEventsContinuously (serialization, pgClient, options = {}) {
-  const {unserialize} = serialization
-  const {clock, start, timeout} = options
-
-  return continuousQuery(
-    pgClient,
-    'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
-    CHANNEL,
-    ({globalOffset}) => globalOffset + 1,
-    {
-      clock,
-      marshal: marshal.bind(null, unserialize),
-      start,
-      timeout,
-    }
+  return consumeQuery(
+    context,
+    logger,
+    client,
+    text,
+    {values},
+    async row => fn(marshal(serialization, row)),
   )
 }
 
-async function readNextStreamOffset (pgClient, type, instance) {
+async function readEventsContinuously (context, logger, client, serialization, options, fn) {
+  const {start, timeout} = options
+
+  return consumeContinuousQuery(
+    context,
+    logger,
+    client,
+    CHANNEL,
+    ({global_offset: globalOffset}) => parseInt(globalOffset) + 1,
+    'SELECT * FROM recluse.event WHERE global_offset >= $1 ORDER BY global_offset',
+    {start, timeout},
+    async row => fn(marshal(serialization, row)),
+  )
+}
+
+async function readNextStreamOffset (context, logger, client, type, instance) {
   if (typeof type !== 'string') throw new Error('Invalid stream type')
   if (typeof instance !== 'string') throw new Error('Invalid stream instance')
 
-  const result = await pgClient.query(
+  const result = await query(
+    context,
+    logger,
+    client,
     'SELECT next FROM recluse.stream WHERE type = $1 AND instance = $2',
-    [type, instance]
+    [type, instance],
   )
 
   if (result.rowCount < 1) return 0
@@ -127,22 +132,29 @@ async function readNextStreamOffset (pgClient, type, instance) {
   return parseInt(result.rows[0].next)
 }
 
-async function insertEvent (serialize, pgClient, offset, streamId, streamOffset, event) {
+async function insertEvent (context, logger, client, serialization, offset, streamId, streamOffset, event) {
+  const {serialize} = serialization
   const {type, data} = event
 
-  await pgClient.query(
+  await query(
+    context,
+    logger,
+    client,
     'INSERT INTO recluse.event (global_offset, type, stream_id, stream_offset, data) VALUES ($1, $2, $3, $4, $5)',
-    [offset, type, streamId, streamOffset, serialize(data, EVENT, type)]
+    [offset, type, streamId, streamOffset, serialize(data)],
   )
 }
 
-async function insertStream (pgClient, type, instance, next) {
+async function insertStream (context, logger, client, type, instance, next) {
   let result
 
   try {
-    result = await pgClient.query(
+    result = await query(
+      context,
+      logger,
+      client,
       'INSERT INTO recluse.stream (type, instance, next) VALUES ($1, $2, $3) RETURNING id',
-      [type, instance, next]
+      [type, instance, next],
     )
   } catch (error) {
     if (error.code === UNIQUE_VIOLATION) return [false, null]
@@ -153,43 +165,53 @@ async function insertStream (pgClient, type, instance, next) {
   return [true, result.rows[0].id]
 }
 
-async function updateStreamOffset (pgClient, type, instance, start, next) {
-  const result = await pgClient.query(
+async function updateStreamOffset (context, logger, client, type, instance, start, next) {
+  const result = await query(
+    context,
+    logger,
+    client,
     'UPDATE recluse.stream SET next = $1 WHERE type = $2 AND instance = $3 AND next = $4 RETURNING id',
-    [next, type, instance, start]
+    [next, type, instance, start],
   )
 
   return result.rowCount > 0 ? [true, result.rows[0].id] : [false, null]
 }
 
-async function updateStreamOffsetUnchecked (pgClient, type, instance, count) {
-  const result = await pgClient.query(
+async function updateStreamOffsetUnchecked (context, logger, client, type, instance, count) {
+  const result = await query(
+    context,
+    logger,
+    client,
     `
     INSERT INTO recluse.stream AS s (type, instance, next) VALUES ($1, $2, $3)
     ON CONFLICT (type, instance) DO UPDATE SET next = s.next + $3
     RETURNING id, next
     `,
-    [type, instance, count]
+    [type, instance, count],
   )
   const {id, next} = result.rows[0]
 
   return [id, next - count]
 }
 
-async function updateGlobalOffset (pgClient, count) {
-  const result = await pgClient.query(
+async function updateGlobalOffset (context, logger, client, count) {
+  const result = await query(
+    context,
+    logger,
+    client,
     `
     INSERT INTO recluse.global_offset AS go (next) VALUES ($1)
     ON CONFLICT (id) DO UPDATE SET next = go.next + $1
     RETURNING next
     `,
-    [count]
+    [count],
   )
 
   return result.rows[0].next - count
 }
 
-function marshal (unserialize, row) {
+function marshal (serialization, row) {
+  const {unserialize} = serialization
   const {
     data,
     global_offset: globalOffset,
@@ -200,7 +222,7 @@ function marshal (unserialize, row) {
   } = row
 
   const event = {type}
-  createLazyGetter(event, 'data', () => unserialize(data, EVENT, type))
+  createLazyGetter(event, 'data', () => unserialize(data))
 
   return {
     event,

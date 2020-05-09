@@ -1,101 +1,350 @@
+const {Pool, types: {builtins: {TIMESTAMP, TIMESTAMPTZ}, getTypeParser, setTypeParser}} = require('pg')
 const Cursor = require('pg-cursor')
-const {types} = require('pg')
 
-const {acquireAsyncIterator} = require('./iterator.js')
-const {allSerial} = require('./async.js')
-const {systemClock} = require('./clock.js')
+const {assertRunning, createContext, doInterminable, isTimedOut, withDefer} = require('./async.js')
 
 const UNIQUE_VIOLATION = '23505'
 
 module.exports = {
-  acquireSessionLock,
-  asyncQuery,
   configure,
-  continuousQuery,
+  consumeContinuousQuery,
+  consumeQuery,
+  createPool,
+  inPoolTransaction,
   inTransaction,
-  releaseSessionLock,
-  waitForNotification,
+  query,
+  withAdvisoryLock,
+  withClient,
 
   UNIQUE_VIOLATION,
 }
 
-async function acquireSessionLock (pgClient, namespace, id = 0) {
-  await pgClient.query('SELECT pg_advisory_lock($1, $2)', [namespace, id])
-}
-
-function asyncQuery (text, values, marshal) {
-  const cursor = new Cursor(text, values)
-  const iterator = createCursorIterator(cursor, marshal)
-
-  return {
-    handleCommandComplete: cursor.handleCommandComplete.bind(cursor),
-    handleDataRow: cursor.handleDataRow.bind(cursor),
-    handleError: cursor.handleError.bind(cursor),
-    handlePortalSuspended: cursor.handlePortalSuspended.bind(cursor),
-    handleReadyForQuery: cursor.handleReadyForQuery.bind(cursor),
-    handleRowDescription: cursor.handleRowDescription.bind(cursor),
-    submit: cursor.submit.bind(cursor),
-
-    [Symbol.asyncIterator]: () => iterator,
-    cancel: iterator.cancel,
-  }
-}
-
-const TYPE_TIMESTAMP = 1114
-const TYPE_TIMESTAMPTZ = 1184
-
+/**
+ * Congifure pg to not convert timestamps into dates.
+ *
+ * Returns a callback that will restore pg to its original state.
+ */
 function configure () {
-  const noParse = v => v
+  const noParse = getTypeParser()
+  const timestampParser = getTypeParser(TIMESTAMP)
+  const timestamptzParser = getTypeParser(TIMESTAMPTZ)
 
-  types.setTypeParser(TYPE_TIMESTAMP, noParse)
-  types.setTypeParser(TYPE_TIMESTAMPTZ, noParse)
-}
+  setTypeParser(TIMESTAMP, noParse)
+  setTypeParser(TIMESTAMPTZ, noParse)
 
-function continuousQuery (pgClient, text, channel, nextOffset, options = {}) {
-  const {extraValues = [], marshal = identity, start = 0, timeout = 100, clock = systemClock} = options
-  const iterator =
-    createContinuousQueryIterator(pgClient, text, start, nextOffset, extraValues, marshal, channel, timeout, clock)
-
-  return {
-    [Symbol.asyncIterator]: () => iterator,
-    cancel: iterator.cancel,
+  return function restore () {
+    setTypeParser(TIMESTAMP, timestampParser)
+    setTypeParser(TIMESTAMPTZ, timestamptzParser)
   }
 }
 
-async function inTransaction (pgClient, fn) {
-  let result
+/**
+ * Continuously executes a query and feeds the rows one-by-one into a consumer
+ * function.
+ *
+ * A channel name must be provided. This channel will be listened to for new
+ * notifications, which indicate that more rows are ready to read.
+ *
+ * The nextOffset function will be passed each row, and should return the next
+ * offset to feed back into the query. This offset is used as the first query
+ * parameter.
+ *
+ * The consumer function should return a boolean to indicate whether to continue
+ * consuming rows.
+ */
+async function consumeContinuousQuery (context, logger, client, channel, nextOffset, text, options, fn) {
+  return withNotificationListener(context, logger, client, channel, async waitForNotification => {
+    const {start = 0, timeout = 100, values = []} = options
+    let shouldContinue = true
+    let offset = start
 
-  await pgClient.query('BEGIN')
+    while (shouldContinue) {
+      assertRunning(context)
 
-  try {
-    result = await fn()
-  } catch (error) {
-    await pgClient.query('ROLLBACK')
+      const [notificationContext] = createContext(logger, {context, timeout})
+      const nextNotification = waitForNotification(notificationContext)
+      nextNotification.catch(() => {})
 
-    throw error
+      const options = {values: [offset, ...values]}
+      shouldContinue = await consumeQuery(context, logger, client, text, options, row => {
+        offset = nextOffset(row)
+
+        return fn(row)
+      })
+
+      if (!shouldContinue) break
+
+      try {
+        await nextNotification
+      } catch (error) {
+        if (!isTimedOut(error)) throw error
+      }
+    }
+  })
+}
+
+/**
+ * Executes a query and feeds the rows one-by-one into a consumer function.
+ *
+ * The consumer function should return a boolean to indicate whether to continue
+ * consuming rows.
+ *
+ * Returns a boolean indicating whether the query was completely consumed.
+ */
+async function consumeQuery (context, logger, client, text, options, fn) {
+  return withDefer(async defer => {
+    const {values = []} = options
+
+    const cursor = await createCursor(context, logger, client, text, values)
+    defer(() => closeCursor(context, logger, cursor))
+
+    let shouldContinue = true
+
+    while (shouldContinue) {
+      const row = await readFromCursor(context, logger, cursor)
+
+      if (!row) return true
+
+      shouldContinue = await fn(row)
+    }
+
+    return false
+  })
+}
+
+function createPool (config = {}) {
+  return new Pool(config)
+}
+
+/**
+ * Executes a function while maintaining a transaction, using a client acquired
+ * from the supplied pool.
+ *
+ * The transaction will either be committed when the call resolves, or rolled
+ * back when the call rejects.
+ *
+ * The client will be released once the transaction is complete.
+ */
+async function inPoolTransaction (context, logger, pool, fn) {
+  return withClient(
+    context,
+    logger,
+    pool,
+    async client => {
+      return inTransaction(
+        context,
+        logger,
+        client,
+        () => fn(client),
+      )
+    },
+  )
+}
+
+/**
+ * Executes a function while maintaining a transaction, using the supplied
+ * client.
+ *
+ * The transaction will either be committed when the call resolves, or rolled
+ * back when the call rejects.
+ */
+async function inTransaction (context, logger, client, fn) {
+  return withDefer(async defer => {
+    await query(context, logger, client, 'BEGIN')
+
+    defer(async recover => {
+      const error = recover()
+
+      if (error) {
+        await query(context, logger, client, 'ROLLBACK')
+
+        throw error
+      }
+
+      await query(context, logger, client, 'COMMIT')
+    })
+
+    return fn()
+  })
+}
+
+/**
+ * Perform a query and return the result.
+ *
+ * This function utilizes a context for cancellation / timeout support.
+ */
+async function query (context, logger, client, text, values) {
+  return doInterminable(context, () => client.query(text, values))
+}
+
+/**
+ * Uses an advisory lock for a particular namespace / ID combination to perform
+ * a unit of work.
+ */
+async function withAdvisoryLock (context, logger, client, namespace, id, fn) {
+  return withDefer(async defer => {
+    defer(await acquireAdvisoryLock(context, logger, client, namespace, id))
+
+    return fn()
+  })
+}
+
+/**
+ * Executes a function while managing a client acquired from the pool.
+ */
+async function withClient (context, logger, pool, fn) {
+  return withDefer(async defer => {
+    const client = await acquireClient(context, logger, pool)
+    defer(recover => {
+      const error = recover()
+
+      if (error) {
+        client.release(true)
+
+        throw error
+      }
+
+      client.release()
+    })
+
+    return fn(client)
+  })
+}
+
+async function acquireAdvisoryLock (context, logger, client, namespace, id) {
+  async function releaseAdvisoryLock () {
+    await client.query('SELECT pg_advisory_unlock($1, $2)', [namespace, id])
   }
 
-  await pgClient.query('COMMIT')
+  return doInterminable(
+    context,
+    async () => {
+      await client.query('SELECT pg_advisory_lock($1, $2)', [namespace, id])
 
-  return result
+      return releaseAdvisoryLock
+    },
+    async promise => {
+      try {
+        await promise
+      } catch (error) {
+        logger.debug(`Postgres advisory lock acquisition failed during cleanup: ${error.stack}`)
+
+        return // lock was never acquired
+      }
+
+      try {
+        await releaseAdvisoryLock()
+      } catch (error) {
+        logger.warn(`Unable to cleanly release Postgres advisory lock: ${error.stack}`)
+      }
+    },
+  )
 }
 
-async function releaseSessionLock (pgClient, namespace, id = 0) {
-  await pgClient.query('SELECT pg_advisory_unlock($1, $2)', [namespace, id])
+async function acquireClient (context, logger, pool) {
+  return doInterminable(
+    context,
+    async () => pool.connect(),
+    async promise => {
+      let client
+
+      try {
+        client = await promise
+      } catch (error) {
+        logger.debug(`Postgres client acquisition failed during cleanup: ${error.stack}`)
+
+        return // client was never acquired
+      }
+
+      try {
+        client.release()
+      } catch (error) {
+        logger.warn(`Unable to cleanly release Postgres client: ${error.stack}`)
+      }
+    },
+  )
 }
 
-async function waitForNotification (client, channel) {
+async function createCursor (context, logger, client, text, values) {
+  return doInterminable(
+    context,
+    async () => client.query(new Cursor(text, values)),
+    async promise => {
+      let cursor
+
+      try {
+        cursor = await promise
+      } catch (error) {
+        logger.debug(`Postgres cursor query failed during cleanup: ${error.stack}`)
+
+        return // query was never submitted
+      }
+
+      try {
+        await closeCursorAsync(logger, cursor)
+      } catch (error) {
+        logger.warn(`Unable to cleanly close Postgres cursor: ${error.stack}`)
+      }
+    },
+  )
+}
+
+async function closeCursor (context, logger, cursor) {
+  return doInterminable(context, () => closeCursorAsync(logger, cursor))
+}
+
+function closeCursorAsync (logger, cursor) {
   return new Promise((resolve, reject) => {
+    cursor.close(error => {
+      if (error) return reject(error)
+
+      resolve()
+    })
+  })
+}
+
+async function readFromCursor (context, logger, cursor) {
+  return doInterminable(context, () => readFromCursorAsync(logger, cursor))
+}
+
+function readFromCursorAsync (logger, cursor) {
+  return new Promise((resolve, reject) => {
+    cursor.read(1, (error, rows) => {
+      if (error) return reject(error)
+
+      resolve(rows[0])
+    })
+  })
+}
+
+async function withNotificationListener (context, logger, client, channel, fn) {
+  return withDefer(async defer => {
+    let notified, resolveNotified, rejectNotified
+
+    await query(context, logger, client, `LISTEN ${channel}`)
+    defer(async recover => {
+      const error = recover()
+      if (error) throw error
+
+      await query(context, logger, client, `UNLISTEN ${channel}`)
+    })
+
+    client.on('end', onEnd)
+    client.on('error', onEnd)
+    client.on('notification', onNotification)
+    defer(removeListeners)
+
     function onEnd (error) {
       removeListeners()
-      reject(error || new Error('Client disconnected while waiting for notification'))
+      error = error || new Error('Client disconnected while waiting for notification')
+
+      if (rejectNotified) return rejectNotified(error)
+
+      throw error
     }
 
     function onNotification (notification) {
-      if (notification.channel !== channel) return
-
-      removeListeners()
-      resolve(notification)
+      if (notification.channel === channel && resolveNotified) resolveNotified()
     }
 
     function removeListeners () {
@@ -104,120 +353,19 @@ async function waitForNotification (client, channel) {
       client.removeListener('notification', onNotification)
     }
 
-    client.on('end', onEnd)
-    client.on('error', onEnd)
-    client.on('notification', onNotification)
-  })
-}
-
-function createCursorIterator (cursor, marshal = identity) {
-  let done = false
-  let final
-
-  return {
-    async next () {
-      if (done) return {done, value: final}
-
-      const [rows, result] = await cursorRead(cursor, 1)
-      done = rows.length < 1
-
-      if (!done) return {done, value: marshal(rows[0])}
-
-      final = result
-      await cursorClose(cursor)
-
-      return {done, value: final}
-    },
-
-    async cancel () {
-      await cursorClose(cursor)
-    },
-  }
-}
-
-function createContinuousQueryIterator (
-  pgClient,
-  text,
-  start,
-  nextOffset,
-  extraValues,
-  marshal,
-  channel,
-  timeout,
-  clock
-) {
-  let next = start
-  let isListening = false
-  let iterator = null
-  let nextNotification = null
-  let timeoutId = null
-
-  return {
-    async next () {
-      while (true) {
-        if (!isListening) {
-          await pgClient.query(`LISTEN ${channel}`)
-          isListening = true
-        }
-
-        if (!iterator) {
-          // if this rejects, we just attempt another query anyway
-          nextNotification = waitForNotification(pgClient, channel).catch(() => {})
-
-          iterator = acquireAsyncIterator(pgClient.query(asyncQuery(text, [next, ...extraValues], marshal)))
-        }
-
-        const result = await iterator.next()
-
-        if (!result.done) {
-          next = nextOffset(result.value)
-
-          return result
-        }
-
-        iterator = null
-
-        if (typeof timeout === 'number') {
-          const timeoutPromise = new Promise(resolve => {
-            timeoutId = clock.setTimeout(() => {
-              timeoutId = null
-              resolve()
-            }, timeout)
-          })
-
-          await Promise.race([nextNotification, timeoutPromise])
-        } else {
-          await nextNotification
-        }
+    async function wait (context) {
+      if (!notified) {
+        notified = new Promise((resolve, reject) => {
+          resolveNotified = resolve
+          rejectNotified = reject
+        }).then(() => {
+          notified = null
+        })
       }
-    },
 
-    async cancel () {
-      await allSerial(
-        async () => { if (iterator) await iterator.cancel() },
-        async () => { if (isListening) await pgClient.query(`UNLISTEN ${channel}`) },
-        () => { if (timeoutId) clock.clearTimeout(timeoutId) }
-      )
-    },
-  }
-}
+      return doInterminable(context, () => notified)
+    }
 
-function cursorRead (cursor, rowCount) {
-  return new Promise((resolve, reject) => {
-    cursor.read(rowCount, (error, rows, result) => {
-      if (error) return reject(error)
-
-      resolve([rows, result])
-    })
+    return fn(wait)
   })
-}
-
-function cursorClose (cursor) {
-  return new Promise((resolve, reject) => {
-    cursor.close(error => { error ? reject(error) : resolve() })
-  })
-}
-
-function identity (value) {
-  return value
 }

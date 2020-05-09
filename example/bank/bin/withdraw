@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+
+const {v4: uuidv4} = require('uuid')
+
+const {WITHDRAW} = require('../../../test/fixture/app/bank/command.js')
+const {accountIdByName, die, executeCommands, runAsync, inTransaction} = require('./util.js')
+
+runAsync(inTransaction(async client => {
+  const [,, accountName, amountString] = process.argv
+  const amount = parseInt(amountString)
+
+  if (!accountName || !amount) die('Usage: withdraw <account> <cents>')
+
+  const accountId = await accountIdByName(client, accountName)
+
+  if (!accountId) die(`Unknown account ${JSON.stringify(accountName)}`)
+
+  const transactionId = uuidv4()
+  await executeCommands(client, {type: WITHDRAW, data: {accountId, amount, transactionId}})
+}))

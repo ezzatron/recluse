@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -e
+
+docker rm --force --volumes recluse-postgres-test || true
+docker pull postgres:alpine
+
+docker run --detach --name recluse-postgres-test \
+  --publish 5432 \
+  --env POSTGRES_PASSWORD=recluse \
+  postgres:alpine

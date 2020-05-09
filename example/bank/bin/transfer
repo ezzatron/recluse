@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+
+const {v4: uuidv4} = require('uuid')
+
+const {TRANSFER} = require('../../../test/fixture/app/bank/command.js')
+const {accountIdByName, die, executeCommands, runAsync, inTransaction} = require('./util.js')
+
+runAsync(inTransaction(async client => {
+  const [,, fromAccountName, toAccountName, amountString] = process.argv
+  const amount = parseInt(amountString)
+
+  if (!fromAccountName || !toAccountName || !amount) die('Usage: transfer <from-account> <to-account> <cents>')
+
+  const fromAccountId = await accountIdByName(client, fromAccountName)
+
+  if (!fromAccountId) die(`Unknown account ${JSON.stringify(fromAccountName)}`)
+
+  const toAccountId = await accountIdByName(client, toAccountName)
+
+  if (!toAccountId) die(`Unknown account ${JSON.stringify(toAccountName)}`)
+
+  const transactionId = uuidv4()
+  await executeCommands(client, {type: TRANSFER, data: {amount, fromAccountId, toAccountId, transactionId}})
+}))

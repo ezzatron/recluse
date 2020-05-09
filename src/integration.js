@@ -4,8 +4,9 @@ module.exports = {
   handleCommandWithIntegration,
 }
 
-async function handleCommandWithIntegration (serialization, pgClient, name, integration, command) {
+async function handleCommandWithIntegration (context, logger, client, serialization, name, integration, command) {
   const {eventTypes, handleCommand} = integration
+  const {type} = command
 
   const streamType = `integration.${name}`
   const recordedEvents = []
@@ -20,7 +21,7 @@ async function handleCommandWithIntegration (serialization, pgClient, name, inte
     })
   }
 
+  logger.info(`Handling ${type} command with ${streamType}`)
   await handleCommand({command, recordEvents})
-
-  return appendEventsUnchecked(serialization, pgClient, streamType, '', recordedEvents)
+  await appendEventsUnchecked(context, logger, client, serialization, streamType, '', recordedEvents)
 }

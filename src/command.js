@@ -1,7 +1,6 @@
-const {asyncQuery, continuousQuery} = require('./pg.js')
 const {COMMAND: CHANNEL} = require('./channel.js')
-const {COMMAND} = require('./handler.js')
 const {createLazyGetter} = require('./object.js')
+const {consumeContinuousQuery, consumeQuery, query} = require('./pg.js')
 
 module.exports = {
   executeCommands,
@@ -9,49 +8,63 @@ module.exports = {
   readUnhandledCommandsContinuously,
 }
 
-async function executeCommands (serialization, pgClient, source, commands) {
+/**
+ * Execute a list of commands.
+ */
+async function executeCommands (context, logger, client, serialization, source, commands) {
   const {serialize} = serialization
 
   for (const command of commands) {
     const {type, data} = command
 
-    await pgClient.query(
+    await query(
+      context,
+      logger,
+      client,
       'INSERT INTO recluse.command (source, type, data) VALUES ($1, $2, $3)',
-      [source, type, serialize(data, COMMAND, type)]
+      [source, type, serialize(data)],
     )
   }
 
-  await pgClient.query(`NOTIFY ${CHANNEL}`)
+  await query(context, logger, client, `NOTIFY ${CHANNEL}`)
 }
 
-function readCommands (serialization, pgClient, id = 0) {
-  const {unserialize} = serialization
-
-  return pgClient.query(asyncQuery(
+/**
+ * Reads commands and feeds the rows one-by-one into a consumer function.
+ */
+async function readCommands (context, logger, client, serialization, id, fn) {
+  return consumeQuery(
+    context,
+    logger,
+    client,
     'SELECT * FROM recluse.command WHERE id >= $1 ORDER BY id',
-    [id],
-    marshal.bind(null, unserialize)
-  ))
-}
-
-function readUnhandledCommandsContinuously (serialization, pgClient, options = {}) {
-  const {unserialize} = serialization
-  const {clock, timeout} = options
-
-  return continuousQuery(
-    pgClient,
-    'SELECT * FROM recluse.command WHERE handled_at IS NULL AND id >= $1 ORDER BY id',
-    CHANNEL,
-    ({id}) => id + 1,
-    {
-      clock,
-      marshal: marshal.bind(null, unserialize),
-      timeout,
-    }
+    {values: [id]},
+    async row => fn(marshal(serialization, row)),
   )
 }
 
-function marshal (unserialize, row) {
+/**
+ * Reads unhandled commands continuously  and feeds the rows one-by-one into a
+ * consumer function.
+ */
+async function readUnhandledCommandsContinuously (context, logger, client, serialization, options, fn) {
+  const {timeout} = options
+
+  return consumeContinuousQuery(
+    context,
+    logger,
+    client,
+    CHANNEL,
+    ({id}) => parseInt(id) + 1,
+    'SELECT * FROM recluse.command WHERE handled_at IS NULL AND id >= $1 ORDER BY id',
+    {timeout},
+    async row => fn(marshal(serialization, row)),
+  )
+}
+
+function marshal (serialization, row) {
+  const {unserialize} = serialization
+
   const {
     data,
     executed_at: executedAt,
@@ -62,7 +75,7 @@ function marshal (unserialize, row) {
   } = row
 
   const command = {type}
-  createLazyGetter(command, 'data', () => unserialize(data, COMMAND, type))
+  createLazyGetter(command, 'data', () => unserialize(data))
 
   return {
     command,
