@@ -355,20 +355,15 @@ async function withNotificationListener (context, logger, client, channel, fn) {
 
     async function wait (context) {
       if (!notified) {
-        notified = doInterminable(
-          context,
-          () => {
-            return new Promise((resolve, reject) => {
-              resolveNotified = resolve
-              rejectNotified = reject
-            }).then(() => {
-              notified = null
-            })
-          },
-        )
+        notified = new Promise((resolve, reject) => {
+          resolveNotified = resolve
+          rejectNotified = reject
+        }).then(() => {
+          notified = null
+        })
       }
 
-      return notified
+      return doInterminable(context, () => notified)
     }
 
     return fn(wait)
