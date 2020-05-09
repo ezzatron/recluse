@@ -36,7 +36,7 @@ describe('appendEvents()', () => {
     },
 
     async afterEach () {
-      client.release(true)
+      client && client.release(true)
       restore()
       await cancel()
     },
@@ -178,8 +178,8 @@ describe('appendEvents()', () => {
     })
 
     afterEach(() => {
-      clientA.release(true)
-      clientB.release(true)
+      clientA && clientA.release(true)
+      clientB && clientB.release(true)
     })
 
     it('should not allow concurrent writes', async () => {
@@ -242,7 +242,7 @@ describe('appendEvents()', () => {
     })
 
     afterEach(() => {
-      listenClient.release(true)
+      listenClient && listenClient.release(true)
     })
 
     it('should notify listening clients when appending events', async () => {

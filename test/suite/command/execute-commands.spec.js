@@ -34,7 +34,7 @@ describe('executeCommands()', () => {
     },
 
     async afterEach () {
-      client.release(true)
+      client && client.release(true)
       restore()
       await cancel()
     },
@@ -111,7 +111,7 @@ describe('executeCommands()', () => {
     })
 
     afterEach(() => {
-      listenClient.release(true)
+      listenClient && listenClient.release(true)
     })
 
     it('should notify listening clients when recording commands', async () => {

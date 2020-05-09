@@ -29,7 +29,7 @@ describe('readNextStreamOffset()', () => {
     },
 
     async afterEach () {
-      client.release(true)
+      client && client.release(true)
       restore()
       await cancel()
     },

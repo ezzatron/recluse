@@ -21,7 +21,7 @@ describe('withAdvisoryLock()', () => {
     },
 
     async afterEach () {
-      client.release(true)
+      client && client.release(true)
       await cancel()
     },
   })
